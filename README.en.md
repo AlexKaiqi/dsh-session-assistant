@@ -5,8 +5,18 @@
 > Everything runs on the browser's native Web Speech API — no backend, no key, nothing to register.
 
 <p align="center">
-  <img src="docs/demo-input.en.gif" alt="Voice input" width="240"/> <img src="docs/demo-speak.en.gif" alt="Read aloud" width="240"/> <img src="docs/demo-edit.en.gif" alt="Edit while listening" width="240"/><br/>
-  <sub>🎤 Voice input (sentences land live) · 🔊 Read aloud (one-click / auto) · ✏️ Edit while listening (append-only, never rewrites)</sub>
+  <img src="docs/demo-input.en.gif" alt="Voice input" width="600"/><br/>
+  <sub>🎤 Voice input: each confirmed sentence lands in the box in real time</sub>
+</p>
+
+<p align="center">
+  <img src="docs/demo-speak.en.gif" alt="Read aloud" width="600"/><br/>
+  <sub>🔊 Read aloud: click the speaker on any reply, stop anytime</sub>
+</p>
+
+<p align="center">
+  <img src="docs/demo-edit.en.gif" alt="Edit while listening" width="600"/><br/>
+  <sub>✏️ Edit while listening: type fixes or delete while the mic runs — append-only, never rewrites</sub>
 </p>
 
 <p align="center">

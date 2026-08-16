@@ -6,8 +6,18 @@
 > 全程浏览器原生 Web Speech API —— 零配置、零成本、无任何后端与注册。
 
 <p align="center">
-  <img src="docs/demo-input.gif" alt="语音输入" width="240"/> <img src="docs/demo-speak.gif" alt="回复朗读" width="240"/> <img src="docs/demo-edit.gif" alt="边听边改" width="240"/><br/>
-  <sub>🎤 语音输入（逐句实时入框） · 🔊 回复朗读（一键/自动） · ✏️ 边听边改（打字修改不回写）</sub>
+  <img src="docs/demo-input.gif" alt="语音输入" width="600"/><br/>
+  <sub>🎤 语音输入：确认句逐句实时入框，中间结果进气泡</sub>
+</p>
+
+<p align="center">
+  <img src="docs/demo-speak.gif" alt="回复朗读" width="600"/><br/>
+  <sub>🔊 回复朗读：点小喇叭一键朗读，可随时打断</sub>
+</p>
+
+<p align="center">
+  <img src="docs/demo-edit.gif" alt="边听边改" width="600"/><br/>
+  <sub>✏️ 边听边改：聆听中打字修改/全删，语音只追加不回写</sub>
 </p>
 
 <p align="center">
