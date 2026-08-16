@@ -5,7 +5,8 @@
 > Everything runs on the browser's native Web Speech API — no backend, no key, nothing to register.
 
 <p align="center">
-  <img src="docs/demo.en.gif" alt="ChatVoice demo: speak → live text → read aloud" width="760"/>
+  <img src="docs/demo-input.en.gif" alt="Voice input" width="240"/> <img src="docs/demo-speak.en.gif" alt="Read aloud" width="240"/> <img src="docs/demo-edit.en.gif" alt="Edit while listening" width="240"/><br/>
+  <sub>🎤 Voice input (sentences land live) · 🔊 Read aloud (one-click / auto) · ✏️ Edit while listening (append-only, never rewrites)</sub>
 </p>
 
 <p align="center">
@@ -22,7 +23,7 @@
 
 | # | Feature | Details |
 |---|---|---|
-| 1 | 🎤 Voice input | Mic button in the composer toolbar: click once and **keep talking** — live interim results appear as you speak, sentence after sentence accumulates; click again to stop and the text stays in the input box. **Type corrections anytime while listening** — recognition keeps running and newly recognized text is appended on stop without touching your edits |
+| 1 | 🎤 Voice input | Mic button in the composer toolbar: click once and **keep talking** — each confirmed sentence lands in the input box in real time (interim results show in the bubble above). **Type corrections or delete anything while listening** — speech only appends to the end of the box, never rewrites it, and deleted text stays deleted after you stop |
 | 2 | 🔊 Read aloud | Speaker button on every assistant reply; click again to stop anytime |
 | 3 | 🔁 Auto-read | When enabled, new replies are read aloud automatically (interruptible at any time) |
 | 4 | ⚙️ Settings | dsh Settings → ChatVoice: recognition language / auto-read / voice / rate — **saved instantly, no restart** |
@@ -50,7 +51,7 @@ Restart dsh web (`dsh web`) and open `http://127.0.0.1:3080`.
 
 ## Usage
 
-1. **Voice input**: click 🎤 in the composer toolbar → allow the microphone permission → keep talking (interim results show live, sentences accumulate) → click 🎤 again to stop → the text is in the input box, press Enter to send. While listening you can **type directly to fix misrecognized words** — the bubble shows "Typing, still listening…" and later recognized text is appended when you stop, without overwriting your edits
+1. **Voice input**: click 🎤 in the composer toolbar → allow the microphone permission → keep talking (each confirmed sentence lands in the box in real time, interim results show in the bubble) → click 🎤 again to stop → press Enter to send. While listening you can **type fixes or clear the box entirely** — speech only appends to the end and never rewrites, so nothing you deleted comes back
 2. **Read aloud**: click 🔊 next to an assistant reply → it reads aloud (button turns into a red ⏹) → click again to stop
 3. **Auto-read**: Settings → ChatVoice → enable "Auto-read new replies" → save; new replies are read automatically
 

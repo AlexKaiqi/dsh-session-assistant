@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.7 (2026-08-16)
+
+- README 演示图拆为三个场景 GIF（中英双语各一套）：demo-input（语音输入）/ demo-speak（回复朗读）/ demo-edit（边听边改）
+
+- 语音输入改为「只追加、绝不回写」：确认句逐句实时追加到框尾；中间结果只进上方气泡不进输入框；停止时不做任何回填——聆听中打字改字、全删都立即生效，删掉的内容不会复活
+- Voice input is now append-only: each confirmed sentence appends to the composer in real time, interim results show only in the bubble, and stopping never refills the box — edits and deletions made while listening are respected immediately
+
 ## 0.1.6 (2026-08-16)
 
 - 边听边改（方案 D）：聆听中真实打字立即接管输入框（isTrusted 区分），识别继续累积；停止时只把接管后新识别的文本追加到框尾，不覆盖用户修改；气泡提示「正在打字修改，识别继续…」

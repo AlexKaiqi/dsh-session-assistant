@@ -27,13 +27,9 @@ window.__ModuleLoader__.load({ id: "dsh-chatvoice", factory: (require) => {
   const spokenKeys = new Set(); // 已自动朗读过的消息（不重复读）
   let recognition = null;       // 活动中的 SpeechRecognition 实例
   let recognitionSession = 0;   // 会话序号: 旧会话的异步回调据此失效
-  let srStartValue = "";        // 识别开始前输入框已有内容
   let srFinals = "";            // 已确认的识别文本（连续听写时逐句累积）
-  let srInterim = "";           // 实时中间结果
+  let srInterim = "";           // 实时中间结果（只进气泡, 不进输入框）
   let srLastFinalIdx = -1;      // 已累积的最后一个 final 结果下标（去重）
-  let srActiveTa = null;        // 本次聆听绑定的输入框
-  let srTakeover = false;       // 用户已真实打字: 接管输入框, 插件不再覆盖
-  let srTakeoverFinalsLen = 0;  // 接管瞬间已累积 finals 的长度（停止时只追加此后的新文本）
   const pendingAuto = new Map();// 自动朗读稳定性检测: key -> {len, since}
 
   /* ══════════════════════════ 样式 ══════════════════════════ */
@@ -246,9 +242,12 @@ window.__ModuleLoader__.load({ id: "dsh-chatvoice", factory: (require) => {
       // React 受控组件的坑: 先重置内部 value tracker, 让 React 把这次修改
       // 当成真实用户输入处理, 否则 input 事件后 DOM 值会被同步回退。
       if (ta._valueTracker) ta._valueTracker.setValue(ta.value);
+      let ss = null, se = null;
+      try { ss = ta.selectionStart; se = ta.selectionEnd; } catch { /* ignore */ }
       setter.call(ta, text);
       ta.dispatchEvent(new Event("input", { bubbles: true }));
       ta.dispatchEvent(new Event("change", { bubbles: true }));
+      try { if (ss !== null && se !== null) ta.setSelectionRange(ss, se); } catch { /* ignore */ }
     } catch {
       try { ta.value = text; } catch { /* ignore */ }
     }
@@ -280,13 +279,9 @@ window.__ModuleLoader__.load({ id: "dsh-chatvoice", factory: (require) => {
     rec.continuous = true;    // 持续聆听: 说完一句不自动停, 逐句累积
     rec.interimResults = true; // 实时中间结果
     rec.maxAlternatives = 1;
-    srStartValue = ta && ta.value !== undefined ? ta.value : "";
     srFinals = "";
     srInterim = "";
     srLastFinalIdx = -1;
-    srActiveTa = ta || null;
-    srTakeover = false;
-    srTakeoverFinalsLen = 0;
     rec.onstart = () => setMicState(btn, "recording");
     rec.onresult = (e) => {
       if (session !== recognitionSession) return; // 旧会话残留回调
@@ -300,10 +295,13 @@ window.__ModuleLoader__.load({ id: "dsh-chatvoice", factory: (require) => {
           interim += t;
         }
       }
-      if (finals) srFinals += finals;
+      if (finals) {
+        srFinals += finals;
+        // 确认句实时追加到框尾: 只增不改, 用户打字/删除的内容永远不动
+        if (ta && ta.value !== undefined) setTextareaValue(ta, ta.value + finals);
+      }
       srInterim = interim;
-      if (ta && ta.value !== undefined && !srTakeover) setTextareaValue(ta, srStartValue + srFinals + srInterim);
-      showPreview(srTakeover ? "正在打字修改，识别继续…" : (srFinals + srInterim), ta, srTakeover);
+      showPreview(srFinals + srInterim, ta, false);
     };
     rec.onerror = (e) => {
       if (session !== recognitionSession) return;
@@ -317,20 +315,9 @@ window.__ModuleLoader__.load({ id: "dsh-chatvoice", factory: (require) => {
     rec.onend = () => {
       if (session !== recognitionSession) return; // 旧会话残留回调
       recognition = null;
-      srActiveTa = null;
       setMicState(btn, "idle");
       hidePreview();
-      if (ta && ta.value !== undefined) {
-        if (srTakeover) {
-          // 打字接管: 只把接管点之后新识别出的文本追加到框尾, 不动用户改过的内容
-          const newPart = srFinals.slice(srTakeoverFinalsLen);
-          if (newPart) setTextareaValue(ta, ta.value + newPart);
-        } else if (srFinals || srInterim) {
-          setTextareaValue(ta, srStartValue + srFinals);
-        }
-      }
-      srTakeover = false;
-      srTakeoverFinalsLen = 0;
+      // 确认句已在聆听中实时追加; 停止时不做任何回填 —— 用户删掉的文字不会复活
       try { ta && ta.focus(); } catch { /* ignore */ }
     };
     recognition = rec;
@@ -584,19 +571,6 @@ window.__ModuleLoader__.load({ id: "dsh-chatvoice", factory: (require) => {
       }
     } catch { /* ignore */ }
     try { document.addEventListener("pointerdown", warmUpSpeech, { once: true, capture: true }); } catch { /* ignore */ }
-    // 聆听中用户真实打字 → 输入框让位给键盘（方案 D: 打字接管）
-    try {
-      document.addEventListener("input", (ev) => {
-        if (!recognition || !ev.isTrusted || !srActiveTa) return;
-        const t = ev.target;
-        if (!(t && t.tagName === "TEXTAREA" && t === srActiveTa)) return;
-        if (!srTakeover) {
-          srTakeover = true;
-          srTakeoverFinalsLen = srFinals.length;
-        }
-        showPreview("正在打字修改，识别继续…", srActiveTa, true);
-      }, true);
-    } catch { /* ignore */ }
     loadConfig();
     scan();
     startObserver();
