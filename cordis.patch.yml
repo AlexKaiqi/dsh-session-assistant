@@ -1,0 +1,6 @@
+# dsh bundle layer: mount the ChatVoice plugin (dsh/index.js via the
+# package root export). Pure client-side voice UX — the host side only
+# exposes the /dsh-chatvoice/config route (read/write ~/.dsh/chatvoice.json).
+- insert:
+    - id: dsh-chatvoice
+      name: 'dsh-chatvoice'
