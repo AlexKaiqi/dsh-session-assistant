@@ -1,88 +1,99 @@
 # ChatVoice 🎤🔊 — dsh-chatvoice
 
-**English** | [中文](README.zh-CN.md)
-> **Free, zero-config, no-API-key voice for DeepSeek Harness (dsh): speak your prompts and have AI replies read aloud.**
-> Everything runs on the browser's native Web Speech API — no backend, no key, nothing to register.
+[English](README.en.md) | **中文**
+
+> 给 DeepSeek Harness (dsh) 装上「免费、免 API key、开箱即用」的**语音输入 + AI 回复朗读**闭环。
+> 全程浏览器原生 Web Speech API —— 零配置、零成本、无任何后端与注册。
 
 <p align="center">
-  <img src="docs/demo.en.gif" alt="ChatVoice demo: speak → live text → read aloud" width="760"/>
+  <img src="docs/demo.gif" alt="ChatVoice demo: 语音输入 → 文字入框 → 一键朗读" width="760"/>
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Zero--config-zero--config-blue" alt="Zero-config"/>
-  <img src="https://img.shields.io/badge/Free-free-brightgreen" alt="Free"/>
-  <img src="https://img.shields.io/badge/No_API_Key-no--key-orange" alt="No API Key"/>
+  <img src="https://img.shields.io/badge/零配置-zero--config-blue" alt="零配置"/>
+  <img src="https://img.shields.io/badge/零成本-free-brightgreen" alt="零成本"/>
+  <img src="https://img.shields.io/badge/免_API_Key-no--key-orange" alt="免 API Key"/>
   <img src="https://img.shields.io/npm/v/dsh-chatvoice" alt="npm"/>
   <img src="https://img.shields.io/badge/license-MIT-lightgrey" alt="MIT"/>
 </p>
 
-**ChatVoice = Chat + Voice**: one plugin for both your mouth and your ears — dictate prompts while your hands stay on the keyboard, and let AI read long replies to you (listening-based learning, accessibility, or just lying back).
+**ChatVoice = Chat + Voice**：一个插件解决「嘴」和「耳朵」——写代码时手不离键盘，用嘴问 AI；懒得看长回复，让 AI 读给你听（听力型学习 / 无障碍 / 摸鱼躺用场景全覆盖）。
 
-## Features
+## 功能
 
-| # | Feature | Details |
+| # | 功能 | 说明 |
 |---|---|---|
-| 1 | 🎤 Voice input | Mic button in the composer toolbar: click once and **keep talking** — live interim results appear as you speak, sentence after sentence accumulates; click again to stop and the text stays in the input box |
-| 2 | 🔊 Read aloud | Speaker button on every assistant reply; click again to stop anytime |
-| 3 | 🔁 Auto-read | When enabled, new replies are read aloud automatically (interruptible at any time) |
-| 4 | ⚙️ Settings | dsh Settings → ChatVoice: recognition language / auto-read / voice / rate — **saved instantly, no restart** |
-| 5 | 🛡 Friendly errors | Mic permission denied / browser unsupported / insecure context / network failure — every case shows a readable toast, never a silent failure |
-| 6 | 🇨🇳 Chinese-first | zh-CN recognition + auto-picks Edge's free natural Chinese voice `Xiaoxiao Online (Natural)` |
+| 1 | 🎤 语音输入 | 输入框旁麦克风按钮：点一下开始说话，**实时中间结果上屏**，再点一下停止，文字进输入框 |
+| 2 | 🔊 回复朗读 | 每条助手回复旁小喇叭，一键朗读该条；点击变「停止」随时打断 |
+| 3 | 🔁 自动朗读 | 设置页开启后，新回复完成自动朗读（可随时打断） |
+| 4 | ⚙️ 设置页 | dsh 设置 → ChatVoice：识别语言 / 自动朗读 / 音色 / 语速，**保存即生效，无需重启** |
+| 5 | 🛡 错误提示 | 麦克风权限被拒 / 浏览器不支持 / 非安全上下文 / 识别网络失败，全部有可读 toast，绝不静默失败 |
+| 6 | 🇨🇳 中文优先 | zh-CN 识别 + 自动选择 Edge 内置 Xiaoxiao Online (Natural) 免费中文自然音色 |
 
-## Why Edge is recommended
+## 为什么推荐 Edge
 
-| Capability | Chrome | Edge | Notes |
+| 能力 | Chrome | Edge | 说明 |
 |---|---|---|---|
-| Speech recognition | ✅ (via Google servers) | ✅ (**via Azure — more reliable in China**) | Chrome may fail with a network error on some networks |
-| Speech voices | Some online voices | ✅ **Xiaoxiao Online (Natural)** — the most natural free Chinese voice | Online voices need network access |
-| Microphone (secure context) | localhost/HTTPS only | Same | dsh web defaults to `http://127.0.0.1:3080` ✅; mic is unavailable over LAN IP (read-aloud still works) |
+| 语音识别 | ✅（识别走 Google 服务器） | ✅（**识别走 Azure，国内更稳**） | 国内网络下 Chrome 可能报 network 错误 |
+| 朗读音色 | 部分在线音色 | ✅ **Xiaoxiao Online (Natural)** 免费中文最自然 | 在线音色需联网 |
+| 麦克风（安全上下文） | 仅 localhost/HTTPS | 同左 | dsh web 默认 http://127.0.0.1:3080 ✅；LAN IP 访问麦克风不可用（朗读不受影响） |
 
-## Install
+## 安装
 
 ```bash
 dsh plugin --profile web add dsh-chatvoice
-# or manually: pnpm add dsh-chatvoice (dsh.profile.bundles reconciles automatically)
+# 或手动: pnpm add dsh-chatvoice（dsh.profile.bundles 会自动 reconcile）
 ```
 
-Restart dsh web (`dsh web`) and open `http://127.0.0.1:3080`.
+重启 dsh web（dsh web），打开 http://127.0.0.1:3080 即可。
 
-> ⚠️ You must access dsh web via `127.0.0.1`: speech recognition requires a secure context (HTTPS or localhost). Over a LAN IP the browser blocks the microphone — input is disabled with a hint, read-aloud still works.
+> ⚠️ 必须用 127.0.0.1 访问：语音识别需要安全上下文（HTTPS 或 localhost），LAN IP 直连时麦克风会被浏览器禁用（自动禁用输入功能并提示，朗读仍可用）。
 
-## Usage
+## 使用
 
-1. **Voice input**: click 🎤 in the composer toolbar → allow the microphone permission → keep talking (interim results show live, sentences accumulate) → click 🎤 again to stop → the text is in the input box, press Enter to send
-2. **Read aloud**: click 🔊 next to an assistant reply → it reads aloud (button turns into a red ⏹) → click again to stop
-3. **Auto-read**: Settings → ChatVoice → enable "Auto-read new replies" → save; new replies are read automatically
+1. **语音输入**：点输入框工具条上的 🎤 → 浏览器弹麦克风授权（允许）→ 说话（中间结果实时上屏）→ 再点 🎤 停止 → 文字已进输入框，回车发送
+2. **朗读**：点助手回复旁 🔊 → 开始朗读（按钮变红色 ⏹）→ 再点停止
+3. **自动朗读**：设置 → ChatVoice → 勾选「自动朗读新回复」→ 保存，立即生效
 
-## Settings
+## 设置项
 
-| Setting | Default | Description |
+| 设置 | 默认 | 说明 |
 |---|---|---|
-| Recognition language | `zh-CN` | `zh-CN` / `en-US` |
-| Auto-read | off | Read new replies automatically when they complete (kept off by default — don't be too noisy) |
-| Voice | empty = auto | Auto-picks the best Chinese voice (Xiaoxiao Online (Natural)); or enter any voice name your browser provides |
-| Rate | `1.0` | `0.5` (slow) ~ `2` (fast) |
+| 识别语言 | zh-CN | zh-CN / en-US |
+| 自动朗读 | 关 | 新回复完成后自动朗读（建议默认关，别太吵） |
+| 音色 | 空 = 自动 | 自动选最佳中文音色（Xiaoxiao Online (Natural)）；可填任意浏览器音色名 |
+| 语速 | 1.0 | 0.5（慢）～ 2（快） |
 
-## How it works
+## 工作原理
 
-- **host** (`dsh/index.js`): Config schema + `GET/POST /dsh-chatvoice/config` route; settings persist to `~/.dsh/chatvoice.json`
-- **client** (`client/client.js`): MutationObserver injects the mic button (composer toolbar) and speaker buttons (assistant reply rows); `SpeechRecognition` for input; `speechSynthesis` for read-aloud
-- Everything comes from the browser: the plugin makes **no network requests, spawns no subprocesses, and needs no API key**
+- **host**（dsh/index.js）：Config schema + GET/POST /dsh-chatvoice/config 路由，配置持久化到 ~/.dsh/chatvoice.json
+- **client**（client/client.js）：MutationObserver 注入麦克风按钮（输入框工具条）与小喇叭（助手回复行）；SpeechRecognition 语音输入；speechSynthesis 朗读
+- 全部能力来自浏览器，插件**没有网络请求、没有子进程、没有 API key**
 
-## Known limitations
+## 已知限制
 
-- Chrome's speech recognition goes through Google servers — on some networks it reports a `network` error → switch to Edge (Azure)
-- Edge's online voices need network access; offline it falls back to the system's local voices
-- Firefox / Safari don't support SpeechRecognition (the mic button is disabled with a hint; read-aloud still works)
-- Recognition accuracy depends on the browser and your microphone, not the plugin
+- Chrome 的语音识别走 Google 服务器，国内网络可能报 network 错误 → 换 Edge（走 Azure）
+- Edge 在线音色需要联网；离线时回退到系统本地音色
+- Firefox / Safari 不支持 SpeechRecognition（按钮自动置灰提示，朗读仍可用）
+- 语音识别准确性取决于浏览器与系统麦克风，与插件无关
 
-## Roadmap (Phase 2)
+## Roadmap（Phase 2）
 
-- 🎙 Push-to-talk (hold Space to dictate, release to send — WeChat-style)
-- 🔊 edge-tts voices (XiaoxiaoNeural, generated server-side + attachment-route playback)
-- 🗣 Voice commands ("save", "continue", "stop" and other spoken triggers)
-- 📼 Voice memos: recordings transcribed into session drafts
-- 🧩 An agent-callable read-aloud tool (host registers `read_aloud`, so the model can speak during replies)
+- 🎙 按住说话（Space 按住识别、松开发送，对标微信语音）
+- 🔊 edge-tts 高音质音色（XiaoxiaoNeural，Node 端生成 + 附件路由播放）
+- 🗣 语音指令（「保存」「继续」「停止」等口令触发操作）
+- 📼 语音备忘：录音转文字存为会话草稿
+- 🧩 agent 可调用朗读工具（host 注册 read_aloud，模型可在回答时主动朗读）
+
+## English quick start
+
+**ChatVoice** gives DeepSeek Harness free, keyless voice: speak your prompts (browser SpeechRecognition) and have AI replies read aloud (speechSynthesis). Zero config, zero cost, zero backend — recommend **Edge** for the most stable Chinese recognition (Azure) and the most natural free Chinese voice (Xiaoxiao Online Natural).
+
+```bash
+dsh plugin --profile web add dsh-chatvoice
+```
+
+Then open http://127.0.0.1:3080, click the 🎤 in the composer toolbar, allow mic permission, and speak. Click 🔊 on any assistant reply to hear it. Configure language / auto-read / voice / rate under Settings → ChatVoice.
 
 ## License
 
