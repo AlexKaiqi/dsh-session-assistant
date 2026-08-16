@@ -60,8 +60,7 @@ window.__ModuleLoader__.load({ id: "dsh-chatvoice", factory: (require) => {
       ".chatvoice-save:disabled{opacity:.5;cursor:default}",
       ".chatvoice-saved{font-size:12px;color:#3fb950;margin-left:8px}",
       ".chatvoice-error{font-size:12px;color:#f85149;margin-top:8px}",
-    ].join("
-");
+    ].join("\n");
     document.head.appendChild(s);
   }
 
@@ -124,10 +123,7 @@ window.__ModuleLoader__.load({ id: "dsh-chatvoice", factory: (require) => {
     try {
       const clone = md.cloneNode(true);
       clone.querySelectorAll("pre, code, table, svg, img, button, style, script, [class*=katex], [class*=attachment]").forEach((n) => n.remove());
-      let text = (clone.innerText || clone.textContent || "").replace(/
-{3,}/g, "
-
-").trim();
+      let text = (clone.innerText || clone.textContent || "").replace(/\n{3,}/g, "\n\n").trim();
       const MAX = 12000;
       if (text.length > MAX) text = text.slice(0, MAX) + "。内容过长，已截断。";
       return text;
@@ -185,6 +181,9 @@ window.__ModuleLoader__.load({ id: "dsh-chatvoice", factory: (require) => {
     try {
       const proto = ta.tagName === "TEXTAREA" ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
       const setter = Object.getOwnPropertyDescriptor(proto, "value").set;
+      // React 受控组件的坑: 先重置内部 value tracker, 让 React 把这次修改
+      // 当成真实用户输入处理, 否则 input 事件后 DOM 值会被同步回退。
+      if (ta._valueTracker) ta._valueTracker.setValue(ta.value);
       setter.call(ta, text);
       ta.dispatchEvent(new Event("input", { bubbles: true }));
       ta.dispatchEvent(new Event("change", { bubbles: true }));
@@ -434,7 +433,7 @@ window.__ModuleLoader__.load({ id: "dsh-chatvoice", factory: (require) => {
           placeholder: "如：Microsoft Xiaoxiao Online (Natural) - Chinese (Mainland)",
           onChange: (e) => set("voiceName", e.target.value),
         }),
-        react.createElement("div", { key: "h", className: "chatvoice-hint" }, "Edge 内置 Xiaoxiao Online (Natural) 免费中文音色最自然；音色列表随浏览器异步加载，重启页面后可看到"),
+        react.createElement("div", { key: "h", className: "chatvoice-hint" }, "Edge 内置 Xiaoxiao Online (Natural) 免费中文音色最自然；音色列表随浏览器异步加载"),
       ]),
       react.createElement("div", { key: "f4", className: "chatvoice-field" }, [
         react.createElement("label", { key: "l", className: "chatvoice-label" }, "语速 / Rate（0.5 慢 ~ 2 快）"),
