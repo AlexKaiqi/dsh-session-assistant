@@ -14,8 +14,8 @@ const ROOT_DIR = join(dirname(fileURLToPath(import.meta.url)), "..");
 const FRAMES = join(ROOT_DIR, "docs", "frames");
 const OUT_GIF = join(ROOT_DIR, "docs", LANG === "en" ? "demo.en.gif" : "demo.gif");
 const T = LANG === "en"
-  ? { interim: "Hello", final1: "Hello world", final2: "keep dictating", prompt: "Reply with exactly one sentence: Hello world! This is the ChatVoice read-aloud demo.", heading: "Hello world 👋", body: "This is the ChatVoice read-aloud demo: click the speaker next to the reply and the AI answer is read out loud." }
-  : { interim: "你好", final1: "你好世界", final2: "继续听写", prompt: "请只回复一句：你好，世界！这是 ChatVoice 语音朗读演示。", heading: "你好，世界 👋", body: "这是 ChatVoice 的朗读演示：点击消息旁的小喇叭，AI 回复就会被读出来。" };
+  ? { interim: "Hello", final1: "Hello world", prompt: "Reply with exactly one sentence: Hello world! This is the ChatVoice read-aloud demo.", heading: "Hello world 👋", body: "This is the ChatVoice read-aloud demo: click the speaker next to the reply and the AI answer is read out loud." }
+  : { interim: "你好", final1: "你好世界", prompt: "请只回复一句：你好，世界！这是 ChatVoice 语音朗读演示。", heading: "你好，世界 👋", body: "这是 ChatVoice 的朗读演示：点击消息旁的小喇叭，AI 回复就会被读出来。" };
 
 const STUB = `
 (function () {
@@ -28,7 +28,7 @@ const STUB = `
       // continuous=true 语义: 逐句累积, 不自动结束
       setTimeout(() => { if (this.onresult) this.onresult({ resultIndex: 0, results: [{ 0: { transcript: T.interim }, isFinal: false }] }); }, 500);
       setTimeout(() => { if (this.onresult) this.onresult({ resultIndex: 0, results: [{ 0: { transcript: T.final1 }, isFinal: true }] }); }, 1200);
-      setTimeout(() => { if (this.onresult) this.onresult({ resultIndex: 1, results: [{ 0: { transcript: T.final1 }, isFinal: true }, { 0: { transcript: T.final2 }, isFinal: true }] }); }, 1800);
+
     }
     stop() { if (this.onend) this.onend(); }
     abort() { if (this.onend) this.onend(); }
@@ -84,12 +84,12 @@ try {
   await sleep(450);
   await page.screenshot({ path: join(FRAMES, "frame-03.png") });
 
-  // 第一句 final 入框
-  await sleep(750);
+  // final 入框（只保留一句, 不再累积第二句）
+  await sleep(650);
   await page.screenshot({ path: join(FRAMES, "frame-04.png") });
 
-  // 第二句继续累积（连续听写不自动停）
-  await sleep(750);
+  // 持续聆听中（不自动停）
+  await sleep(700);
   await page.screenshot({ path: join(FRAMES, "frame-05.png") });
 
   // 手动停止

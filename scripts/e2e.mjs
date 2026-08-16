@@ -314,6 +314,70 @@ try {
     } else {
       check("自动朗读可随时打断", false, "无按钮");
     }
+
+    /* ── 3.6 全部朗读模式 ── */
+    // 清理此前的假消息, 避免旧条目在 all 模式下被补读
+    await page.evaluate(() => {
+      ["e2e-think-1", "e2e-concl-1", "e2e-auto-think-1", "e2e-auto-tool-1", "e2e-auto-msg-1", "e2e-auto-tail-1"].forEach((k) => {
+        const el = document.querySelector('[data-chat-flow-key="' + k + '"]');
+        if (el) el.remove();
+      });
+    });
+    // 打开设置 → 切「全部朗读」
+    let settingsBtn2 = await page.evaluateHandle(() => [...document.querySelectorAll("button")].find((b) => (b.getAttribute("aria-label") || b.textContent || "").trim() === "设置"));
+    if (!settingsBtn2.asElement()) {
+      await page.click('button[aria-label="打开侧边栏"]');
+      await sleep(800);
+      settingsBtn2 = await page.evaluateHandle(() => [...document.querySelectorAll("button")].find((b) => (b.getAttribute("aria-label") || b.textContent || "").trim() === "设置"));
+    }
+    await settingsBtn2.asElement().click();
+    await sleep(1500);
+    const cvTab2 = await page.evaluateHandle(() => [...document.querySelectorAll("button")].find((b) => (b.textContent || "").trim() === "ChatVoice"));
+    await cvTab2.asElement().click();
+    await sleep(1200);
+    await page.select(".chatvoice-mode", "all");
+    await sleep(300);
+    const saveBtn2 = await page.evaluateHandle(() => [...document.querySelectorAll("button")].find((b) => (b.textContent || "").includes("保存设置")));
+    await saveBtn2.asElement().click();
+    await sleep(1500);
+    const allCfg = await page.evaluate(() => fetch("/dsh-chatvoice/config").then((r) => r.json()).catch(() => null));
+    check("自动朗读范围已切换为「全部朗读」", !!(allCfg && allCfg.value && allCfg.value.autoSpeakMode === "all"), JSON.stringify(allCfg && allCfg.value));
+    await page.keyboard.press("Escape");
+    await sleep(600);
+
+    const base2 = await page.evaluate(() => (window.__chatvoiceE2E && window.__chatvoiceE2E.synthesis ? window.__chatvoiceE2E.synthesis._u.length : 0));
+    await page.evaluate(() => {
+      const container = document.querySelector("[data-chat-flow]") || document.body;
+      const mk = (kind, key, mdText) => {
+        const item = document.createElement("div");
+        item.setAttribute("data-chat-flow-kind", kind);
+        item.setAttribute("data-chat-flow-key", key);
+        item.innerHTML = mdText
+          ? '<div data-disclosure-row="true"><span>Think</span></div><div class="_markdown_1nba0_5"><p>' + mdText + '</p></div>'
+          : '<div class="_call">tool</div>';
+        container.appendChild(item);
+        return item;
+      };
+      mk("assistant-step", "e2e-all-think-1", "全部朗读模式应读的思维链文本。");
+      mk("tool-call", "e2e-all-tool-1", null);
+      mk("assistant-step", "e2e-all-concl-1", "全部朗读模式应读的结论文本。");
+      mk("turn-tail", "e2e-all-tail-1", null);
+    });
+    let allTexts = [];
+    const t2 = Date.now();
+    while (Date.now() - t2 < 15000) {
+      allTexts = await page.evaluate(() => (window.__chatvoiceE2E && window.__chatvoiceE2E.synthesis ? window.__chatvoiceE2E.synthesis._u.map((u) => u.text) : []));
+      if (allTexts.some((t) => t && t.includes("结论文本")) && allTexts.some((t) => t && t.includes("思维链文本"))) break;
+      await sleep(500);
+    }
+    const allOk = allTexts.some((t) => t && t.includes("全部朗读模式应读的结论文本")) && allTexts.some((t) => t && t.includes("全部朗读模式应读的思维链文本"));
+    check("全部朗读模式: 思维链与结论都被朗读", allOk, JSON.stringify(allTexts.slice(-4)));
+    await page.evaluate(() => {
+      ["e2e-all-think-1", "e2e-all-tool-1", "e2e-all-concl-1", "e2e-all-tail-1"].forEach((k) => {
+        const el = document.querySelector('[data-chat-flow-key="' + k + '"]');
+        if (el) el.remove();
+      });
+    });
   } catch (e) {
     check("自动朗读开关开启后新回复自动朗读", false, String(e).slice(0, 160));
   }
@@ -350,6 +414,8 @@ try {
         if (cb && cb.checked) cb.click();
       });
       await sleep(200);
+      await page.select(".chatvoice-mode", "final");
+      await sleep(200);
       await page.evaluate(() => {
         const num = document.querySelector('input[type="number"].chatvoice-input');
         const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
@@ -366,6 +432,7 @@ try {
       const serverCfg = await page.evaluate(() => fetch("/dsh-chatvoice/config").then((r) => r.json()).catch((e) => ({ fetchErr: String(e) })));
       check("设置持久化到宿主（GET /config 返回 rate=1.5）", serverCfg && serverCfg.value && serverCfg.value.rate === 1.5, JSON.stringify(serverCfg && serverCfg.value));
       check("自动朗读已复位为关闭", serverCfg && serverCfg.value && serverCfg.value.autoSpeak === false, JSON.stringify(serverCfg && serverCfg.value));
+      check("自动朗读范围复位为只读结论", serverCfg && serverCfg.value && serverCfg.value.autoSpeakMode === "final", JSON.stringify(serverCfg && serverCfg.value));
       await page.keyboard.press("Escape");
       await sleep(600);
     }

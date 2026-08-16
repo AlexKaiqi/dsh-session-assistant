@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.4 (2026-08-16)
+
+- 自动朗读新增「范围」选项：只读最终结论（默认）/ 全部朗读（思维链+结论），设置页下拉切换
+- README 合并为单文件双语版：页内锚点切换语言（不再跳页），EN 段用 demo.en.gif、中文段用 demo.gif
+- 演示 GIF 识别文本只保留「你好世界」/「Hello world」（去掉第二句累积）
+- Auto-read scope option: final conclusion only (default) or everything including thinking chains
+- Single bilingual README with in-page anchor language switching; demo.en.gif for the English section, demo.gif for the Chinese section
+- Demo GIFs keep a single final transcript: 你好世界 / Hello world
+
 ## 0.1.3 (2026-08-16)
 
 - 自动朗读修复：speak 前 resume + 首次用户交互预热（0 音量空 utterance）解锁浏览器自动播放策略

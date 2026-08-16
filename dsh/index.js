@@ -27,6 +27,10 @@ export const Config = z.object({
     .boolean()
     .description('自动朗读新回复（可点小喇叭随时停止）/ auto read new replies')
     .default(false),
+  autoSpeakMode: z
+    .union([z.const('final'), z.const('all')])
+    .description('自动朗读范围 / auto-read scope: final = 只读最终结论（跳过思维链）, all = 全部朗读（思维链+结论）')
+    .default('final'),
   voiceName: z
     .string()
     .description('朗读音色名，留空自动选最佳中文音色（Edge: Xiaoxiao Online (Natural)）/ voice name; empty = auto pick')
@@ -69,6 +73,7 @@ function normalize(next) {
   const out = { ...(next || {}) }
   if (out.recognitionLang !== 'zh-CN' && out.recognitionLang !== 'en-US') out.recognitionLang = 'zh-CN'
   if (typeof out.autoSpeak !== 'boolean') out.autoSpeak = false
+  if (out.autoSpeakMode !== 'final' && out.autoSpeakMode !== 'all') out.autoSpeakMode = 'final'
   if (typeof out.voiceName !== 'string') out.voiceName = ''
   const r = Number(out.rate)
   out.rate = Number.isFinite(r) ? Math.min(2, Math.max(0.5, r)) : 1.0

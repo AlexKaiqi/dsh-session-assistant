@@ -20,7 +20,7 @@ window.__ModuleLoader__.load({ id: "dsh-chatvoice", factory: (require) => {
   /* ══════════════════════════ 共享状态 ══════════════════════════ */
 
   // Live config (与设置页/宿主文件保持同步)
-  const cfg = { recognitionLang: "zh-CN", autoSpeak: false, voiceName: "", rate: 1.0 };
+  const cfg = { recognitionLang: "zh-CN", autoSpeak: false, autoSpeakMode: "final", voiceName: "", rate: 1.0 };
 
   let voices = [];              // 异步加载的可用音色
   let currentSpeakKey = null;   // 正在朗读的消息 flow key（用于按钮高亮/停止）
@@ -404,15 +404,17 @@ window.__ModuleLoader__.load({ id: "dsh-chatvoice", factory: (require) => {
     });
   }
 
-  /** 自动朗读：最终结论文本稳定 1.5 秒后朗读一次（可随时打断）；思维链不读。 */
+  /** 自动朗读：文本稳定 1.5 秒后朗读一次（可随时打断）。
+   *  final 模式只读最终结论; all 模式连思维链/中间步骤一起读。 */
   function autoSpeakScan() {
     if (!cfg.autoSpeak) { pendingAuto.clear(); return; }
     const now = Date.now();
-    const conclusions = computeFinalConclusions();
+    const scopeAll = cfg.autoSpeakMode === "all";
+    const conclusions = scopeAll ? null : computeFinalConclusions();
     document.querySelectorAll('[data-chat-flow-kind="assistant-step"]').forEach((item) => {
       const mds = item.querySelectorAll("[class*=markdown]");
       if (!mds.length) return;
-      if (!conclusions.has(item)) { pendingAuto.delete(item.getAttribute("data-chat-flow-key") || item.getAttribute("data-chat-anchor-key") || ""); return; }
+      if (!scopeAll && !conclusions.has(item)) { pendingAuto.delete(item.getAttribute("data-chat-flow-key") || item.getAttribute("data-chat-anchor-key") || ""); return; }
       const md = mds[mds.length - 1];
       const key = item.getAttribute("data-chat-flow-key") || item.getAttribute("data-chat-anchor-key") || "";
       if (!key || spokenKeys.has(key)) return;
@@ -515,6 +517,14 @@ window.__ModuleLoader__.load({ id: "dsh-chatvoice", factory: (require) => {
             onChange: (e) => set("autoSpeak", e.target.checked),
           }),
           "自动朗读新回复（可点小喇叭随时停止）",
+        ]),
+        react.createElement("select", {
+          key: "m", className: "chatvoice-input chatvoice-mode", style: { marginTop: 6 },
+          value: state.value.autoSpeakMode || "final",
+          onChange: (e) => set("autoSpeakMode", e.target.value),
+        }, [
+          react.createElement("option", { key: "f", value: "final" }, "只读最终结论（跳过思维链）"),
+          react.createElement("option", { key: "a", value: "all" }, "全部朗读（思维链 + 结论）"),
         ]),
       ]),
       react.createElement("div", { key: "f3", className: "chatvoice-field" }, [
