@@ -1,6 +1,6 @@
 {
   "name": "dsh-chatvoice",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "ChatVoice — free voice input + AI reply read-aloud for DeepSeek Harness (dsh). Zero config, zero cost, no API key, built on the browser's native Web Speech API. 给 DSH 装上「免费、免 API key、开箱即用」的语音输入 + 回复朗读闭环（中文优先）。",
   "type": "module",
   "main": "./dsh/index.js",

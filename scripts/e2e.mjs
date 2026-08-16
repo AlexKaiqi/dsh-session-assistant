@@ -190,21 +190,43 @@ try {
     check("新一轮在已有文本上继续累积", false, "无按钮可点");
   }
 
-  /* ── 3. 小喇叭注入 + 朗读调用链（DOM 注入假消息） ── */
+  /* ── 3. 小喇叭注入（只挂最终结论）+ 朗读调用链（DOM 注入假消息） ── */
   await page.evaluate(() => {
-    const item = document.createElement("div");
-    item.setAttribute("data-chat-flow-kind", "assistant-step");
-    item.setAttribute("data-chat-flow-key", "e2e-fake-msg-1");
-    item.innerHTML =
+    const container = document.querySelector("[data-chat-flow]") || document.body;
+    const think = document.createElement("div");
+    think.setAttribute("data-chat-flow-kind", "assistant-step");
+    think.setAttribute("data-chat-flow-key", "e2e-think-1");
+    think.innerHTML =
+      '<div data-disclosure-row="true"><span>Think</span></div>' +
+      '<div class="_markdown_1nba0_5"><p>这是思维链文本，不应出现小喇叭。</p></div>';
+    const concl = document.createElement("div");
+    concl.setAttribute("data-chat-flow-kind", "assistant-step");
+    concl.setAttribute("data-chat-flow-key", "e2e-concl-1");
+    concl.innerHTML =
       '<div data-disclosure-row="true"><span>Think</span></div>' +
       '<div class="_markdown_1nba0_5"><p>你好，这是测试朗读文本。</p><pre><code>console.log("skip me")</code></pre></div>';
-    document.body.appendChild(item);
+    container.appendChild(think);
+    container.appendChild(concl);
   });
   let speakBtn = null;
   try {
-    speakBtn = await page.waitForSelector('[data-chat-flow-key="e2e-fake-msg-1"] [data-chatvoice-speak]', { timeout: 15000 });
-    check("助手消息块出现小喇叭按钮", !!speakBtn);
-  } catch { check("助手消息块出现小喇叭按钮", false, "observer 未注入"); }
+    speakBtn = await page.waitForSelector('[data-chat-flow-key="e2e-concl-1"] [data-chatvoice-speak]', { timeout: 15000 });
+  } catch { /* 下方统一断言 */ }
+  await sleep(500);
+  const placement = await page.evaluate(() => {
+    const think = document.querySelector('[data-chat-flow-key="e2e-think-1"]');
+    const concl = document.querySelector('[data-chat-flow-key="e2e-concl-1"]');
+    const thinkBtn = think && think.querySelector("[data-chatvoice-speak]");
+    const conclBtn = concl && concl.querySelector("[data-chatvoice-speak]");
+    return {
+      thinkHasBtn: !!thinkBtn,
+      conclHasBtn: !!conclBtn,
+      conclBtnInMd: !!(conclBtn && conclBtn.closest("[class*=markdown]")),
+      conclBtnInDisc: !!(conclBtn && conclBtn.closest("[data-disclosure-row]")),
+    };
+  });
+  check("小喇叭只挂在最终结论上（思维链没有）", placement.conclHasBtn && !placement.thinkHasBtn, JSON.stringify(placement));
+  check("小喇叭位于结论正文内、不在 Think 行", placement.conclBtnInMd && !placement.conclBtnInDisc, JSON.stringify(placement));
 
   if (speakBtn) {
     await speakBtn.click();

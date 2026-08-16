@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.2 (2026-08-16)
+
+- 朗读小喇叭只挂在**最终结论**正文右上角（悬浮按钮），思维链/中间步骤不再显示喇叭
+- 自动朗读同样只读最终结论，跳过思维链
+- Speaker button now appears only on the final conclusion (floating at the top-right of the reply body), never on thinking-chain rows
+- Auto-read also skips thinking chains and reads only final conclusions
+
 ## 0.1.1 (2026-08-16)
 
 - 连续听写：点一次麦克风持续聆听，多句累积写入输入框，仅手动点击停止（不再说完一句自动停）

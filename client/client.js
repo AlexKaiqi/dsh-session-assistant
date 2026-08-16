@@ -44,6 +44,7 @@ window.__ModuleLoader__.load({ id: "dsh-chatvoice", factory: (require) => {
     s.textContent = [
       ".chatvoice-mic-btn,.chatvoice-speak-btn{display:inline-flex;align-items:center;justify-content:center;background:transparent;border:0;padding:4px 5px;margin:0 2px;cursor:pointer;color:inherit;opacity:.75;border-radius:6px;line-height:1;vertical-align:middle;font-size:14px}",
       ".chatvoice-mic-btn:hover:not(:disabled),.chatvoice-speak-btn:hover{opacity:1;background:rgba(127,127,127,.15)}",
+      ".chatvoice-speak-float{position:absolute;top:6px;right:6px;z-index:5;background:rgba(127,127,127,.18);border-radius:8px;padding:4px 6px;backdrop-filter:blur(4px)}",
       ".chatvoice-mic-btn:disabled{opacity:.35;cursor:not-allowed}",
       ".chatvoice-mic-btn svg,.chatvoice-speak-btn svg{width:16px;height:16px;display:block}",
       ".chatvoice-recording{color:#f85149!important;opacity:1!important;animation:chatvoice-pulse 1.4s ease-in-out infinite}",
@@ -342,20 +343,32 @@ window.__ModuleLoader__.load({ id: "dsh-chatvoice", factory: (require) => {
     });
   }
 
-  /** 在助手最终回复（带 markdown 的消息块）头部行插入小喇叭按钮。 */
+  /** 某条 assistant-step 是否为「最终结论」: 其后紧跟的 flow item 不是 assistant-step（或已是最后一条）。 */
+  function isConclusion(item) {
+    let next = item.nextElementSibling;
+    while (next && !(next.getAttribute && next.getAttribute("data-chat-flow-kind"))) next = next.nextElementSibling;
+    const kind = next && next.getAttribute ? next.getAttribute("data-chat-flow-kind") : null;
+    return kind !== "assistant-step";
+  }
+
+  /** 只在最终结论正文右上角放小喇叭: 思维链/中间步骤一个都不放。 */
   function injectSpeakers() {
     if (!document.body) return;
     document.querySelectorAll('[data-chat-flow-kind="assistant-step"]').forEach((item) => {
-      if (item.querySelector("[data-chatvoice-speak]")) return;
       const mds = item.querySelectorAll("[class*=markdown]");
       if (!mds.length) return;
+      const existing = item.querySelector("[data-chatvoice-speak]");
+      if (!isConclusion(item)) {
+        // 不再是结论（后续又有新回复）: 摘掉按钮
+        if (existing) existing.remove();
+        return;
+      }
+      if (existing) return;
       const md = mds[mds.length - 1];
-      const row = item.querySelector("[data-disclosure-row]") || item.querySelector("[class*=row]");
-      if (!row) return;
       const key = item.getAttribute("data-chat-flow-key") || item.getAttribute("data-chat-anchor-key") || "";
       const btn = document.createElement("button");
       btn.type = "button";
-      btn.className = "chatvoice-speak-btn";
+      btn.className = "chatvoice-speak-btn chatvoice-speak-float";
       btn.dataset.chatvoiceSpeak = "1";
       btn.dataset.key = key;
       btn.addEventListener("click", (ev) => {
@@ -363,18 +376,20 @@ window.__ModuleLoader__.load({ id: "dsh-chatvoice", factory: (require) => {
         ev.stopPropagation();
         speak(extractText(md), key);
       });
-      row.appendChild(btn);
+      try { md.style.position = "relative"; } catch { /* ignore */ }
+      md.appendChild(btn);
       renderSpeaking();
     });
   }
 
-  /** 自动朗读：新回复文本稳定 1.5 秒后朗读一次（可随时打断）。 */
+  /** 自动朗读：最终结论文本稳定 1.5 秒后朗读一次（可随时打断）；思维链不读。 */
   function autoSpeakScan() {
     if (!cfg.autoSpeak) { pendingAuto.clear(); return; }
     const now = Date.now();
     document.querySelectorAll('[data-chat-flow-kind="assistant-step"]').forEach((item) => {
       const mds = item.querySelectorAll("[class*=markdown]");
       if (!mds.length) return;
+      if (!isConclusion(item)) { pendingAuto.delete(item.getAttribute("data-chat-flow-key") || item.getAttribute("data-chat-anchor-key") || ""); return; }
       const md = mds[mds.length - 1];
       const key = item.getAttribute("data-chat-flow-key") || item.getAttribute("data-chat-anchor-key") || "";
       if (!key || spokenKeys.has(key)) return;
