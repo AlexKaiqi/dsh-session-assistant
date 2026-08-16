@@ -48,14 +48,11 @@ const STUB = `
     constructor() { this.lang = ""; this.continuous = false; this.interimResults = false; this.maxAlternatives = 1; this.onstart = null; this.onresult = null; this.onerror = null; this.onend = null; }
     start() {
       if (this.onstart) this.onstart();
-      const steps = [
-        () => { if (this.onresult) this.onresult({ resultIndex: 0, results: [{ 0: { transcript: "你好" }, isFinal: false }] }); },
-        () => { if (this.onresult) this.onresult({ resultIndex: 0, results: [{ 0: { transcript: "你好" }, isFinal: true }, { 0: { transcript: "世界" }, isFinal: true }] }); },
-        () => { if (this.onend) this.onend(); },
-      ];
-      let step = 0;
-      const tick = () => { steps[step](); step++; if (step < steps.length) setTimeout(tick, 120); };
-      setTimeout(tick, 80);
+      // continuous=true 语义: 两轮 final 累积, 绝不自动 onend —— 只有 stop()/abort() 结束
+      setTimeout(() => { if (this.onresult) this.onresult({ resultIndex: 0, results: [{ 0: { transcript: "你好" }, isFinal: false }] }); }, 400);
+      setTimeout(() => { if (this.onresult) this.onresult({ resultIndex: 0, results: [{ 0: { transcript: "你好" }, isFinal: true }, { 0: { transcript: "世界" }, isFinal: true }] }); }, 700);
+      setTimeout(() => { if (this.onresult) this.onresult({ resultIndex: 2, results: [{ 0: { transcript: "你好" }, isFinal: true }, { 0: { transcript: "世界" }, isFinal: true }, { 0: { transcript: "继续" }, isFinal: false }] }); }, 1000);
+      setTimeout(() => { if (this.onresult) this.onresult({ resultIndex: 2, results: [{ 0: { transcript: "你好" }, isFinal: true }, { 0: { transcript: "世界" }, isFinal: true }, { 0: { transcript: "继续听写" }, isFinal: true }] }); }, 1300);
     }
     stop() { if (this.onend) this.onend(); }
     abort() { if (this.onend) this.onend(); }
@@ -112,13 +109,23 @@ try {
     check("输入框工具条出现麦克风按钮", !!micBtn);
   } catch { check("输入框工具条出现麦克风按钮", false, "未找到 [data-chatvoice-mic]"); }
 
-  /* ── 2. 假识别全链路 ── */
+  /* ── 2. 连续听写全链路 ── */
   if (micBtn) {
     await micBtn.click();
+    // 即时性: 点击后 300ms 内出现聆听态预览（不等第一个识别结果）
     await sleep(250);
-    const recording = await page.evaluate(() => !!document.querySelector(".chatvoice-recording"));
-    check("点击麦克风后进入识别中状态（红色脉冲）", recording);
+    const quick = await page.evaluate(() => {
+      const p = document.querySelector(".chatvoice-preview");
+      return {
+        recording: !!document.querySelector(".chatvoice-recording"),
+        previewVisible: !!(p && p.style.display !== "none" && p.style.opacity !== "0"),
+        listening: !!(p && p.classList.contains("chatvoice-listening")),
+        text: p ? p.textContent : "",
+      };
+    });
+    check("点击后 300ms 内出现聆听态预览（即时反馈）", quick.recording && quick.previewVisible && quick.listening && quick.text.includes("正在聆听"), JSON.stringify(quick));
 
+    // 多句 final 累积写入输入框
     let value = "";
     const t0 = Date.now();
     while (Date.now() - t0 < 8000) {
@@ -126,19 +133,61 @@ try {
         const ta = [...document.querySelectorAll("textarea")].find((t) => !t.readOnly);
         return ta ? ta.value : "";
       });
-      if (value.includes("你好世界")) break;
+      if (value.includes("你好世界继续听写")) break;
       await sleep(200);
     }
-    check("识别 final 文本写入输入框", value.includes("你好世界"), "composer.value=" + JSON.stringify(value));
+    check("多句 final 累积写入输入框（连续听写）", value.includes("你好世界继续听写"), "composer.value=" + JSON.stringify(value));
 
-    const previewShown = await page.evaluate(() => {
+    // 持续聆听: 全部结果出来后仍未自动停止
+    await sleep(600);
+    const still = await page.evaluate(() => ({
+      recording: !!document.querySelector(".chatvoice-recording"),
+      preview: (() => { const p = document.querySelector(".chatvoice-preview"); return p ? p.textContent : ""; })(),
+    }));
+    check("说完多句不自动停止（持续聆听中）", still.recording, "recording=" + still.recording);
+    check("预览框实时显示识别文本", still.preview.includes("你好世界继续听写"), JSON.stringify(still.preview));
+
+    // 手动停止: 文本保留、状态复位、预览淡出隐藏
+    await micBtn.click();
+    await sleep(700);
+    const stopped = await page.evaluate(() => {
       const p = document.querySelector(".chatvoice-preview");
-      return p ? p.textContent : "";
+      return {
+        recording: !!document.querySelector(".chatvoice-recording"),
+        previewHidden: !p || p.style.display === "none",
+        value: (() => { const ta = [...document.querySelectorAll("textarea")].find((t) => !t.readOnly); return ta ? ta.value : ""; })(),
+      };
     });
-    check("识别过程有中间结果预览", previewShown.includes("你好世界") || previewShown.includes("你好"), JSON.stringify(previewShown));
+    check("点击停止后结束聆听、文本保留", !stopped.recording && stopped.value.includes("你好世界继续听写"), JSON.stringify({ recording: stopped.recording, value: stopped.value.slice(0, 30) }));
+    check("停止后预览框淡出隐藏", stopped.previewHidden, "hidden=" + stopped.previewHidden);
+
+    // 停止后再点: 开新一轮, 在已有文本上继续累积
+    await micBtn.click();
+    await sleep(250);
+    const restarted = await page.evaluate(() => !!document.querySelector(".chatvoice-recording"));
+    check("停止后再次点击可开新一轮聆听", restarted);
+    let value2 = "";
+    const t1 = Date.now();
+    while (Date.now() - t1 < 8000) {
+      value2 = await page.evaluate(() => {
+        const ta = [...document.querySelectorAll("textarea")].find((t) => !t.readOnly);
+        return ta ? ta.value : "";
+      });
+      if ((value2.match(/你好世界继续听写/g) || []).length >= 2) break;
+      await sleep(200);
+    }
+    const rounds = (value2.match(/你好世界继续听写/g) || []).length;
+    check("新一轮在已有文本上继续累积", rounds >= 2, "rounds=" + rounds + " len=" + value2.length);
+    await micBtn.click(); // 收尾停掉
+    await sleep(600);
   } else {
-    check("点击麦克风后进入识别中状态", false, "无按钮可点");
-    check("识别 final 文本写入输入框", false, "无按钮可点");
+    check("点击后 300ms 内出现聆听态预览（即时反馈）", false, "无按钮可点");
+    check("多句 final 累积写入输入框（连续听写）", false, "无按钮可点");
+    check("说完多句不自动停止（持续聆听中）", false, "无按钮可点");
+    check("点击停止后结束聆听、文本保留", false, "无按钮可点");
+    check("停止后预览框淡出隐藏", false, "无按钮可点");
+    check("停止后再次点击可开新一轮聆听", false, "无按钮可点");
+    check("新一轮在已有文本上继续累积", false, "无按钮可点");
   }
 
   /* ── 3. 小喇叭注入 + 朗读调用链（DOM 注入假消息） ── */

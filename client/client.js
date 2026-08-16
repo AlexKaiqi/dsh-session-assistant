@@ -26,9 +26,11 @@ window.__ModuleLoader__.load({ id: "dsh-chatvoice", factory: (require) => {
   let currentSpeakKey = null;   // 正在朗读的消息 flow key（用于按钮高亮/停止）
   const spokenKeys = new Set(); // 已自动朗读过的消息（不重复读）
   let recognition = null;       // 活动中的 SpeechRecognition 实例
+  let recognitionSession = 0;   // 会话序号: 旧会话的异步回调据此失效
   let srStartValue = "";        // 识别开始前输入框已有内容
-  let srFinals = "";            // 已确认的识别文本
+  let srFinals = "";            // 已确认的识别文本（连续听写时逐句累积）
   let srInterim = "";           // 实时中间结果
+  let srLastFinalIdx = -1;      // 已累积的最后一个 final 结果下标（去重）
   const pendingAuto = new Map();// 自动朗读稳定性检测: key -> {len, since}
 
   /* ══════════════════════════ 样式 ══════════════════════════ */
@@ -48,8 +50,11 @@ window.__ModuleLoader__.load({ id: "dsh-chatvoice", factory: (require) => {
       ".chatvoice-speaking{color:#f85149!important;opacity:1!important;font-weight:700}",
       "@keyframes chatvoice-pulse{0%{box-shadow:0 0 0 0 rgba(248,81,73,.45)}70%{box-shadow:0 0 0 7px rgba(248,81,73,0)}100%{box-shadow:0 0 0 0 rgba(248,81,73,0)}}",
       ".chatvoice-toast{position:fixed;left:50%;bottom:110px;transform:translateX(-50%);z-index:2147483000;background:rgba(22,27,34,.95);color:#e6edf3;border:1px solid #30363d;border-radius:10px;padding:10px 16px;font-size:13px;line-height:1.5;max-width:min(560px,86vw);box-shadow:0 8px 24px rgba(0,0,0,.4);transition:opacity .25s}",
-      ".chatvoice-preview{position:fixed;left:50%;bottom:150px;transform:translateX(-50%);z-index:2147483000;background:rgba(22,27,34,.96);color:#f0f6fc;border:1px solid #f85149;border-radius:10px;padding:10px 16px;font-size:13px;line-height:1.5;max-width:min(560px,86vw);box-shadow:0 8px 24px rgba(0,0,0,.4)}",
+      ".chatvoice-preview{position:fixed;z-index:2147483000;background:rgba(22,27,34,.96);color:#f0f6fc;border:1px solid #f85149;border-radius:10px;padding:10px 16px;font-size:13px;line-height:1.5;max-width:min(560px,86vw);box-shadow:0 8px 24px rgba(0,0,0,.4);transition:opacity .25s}",
+      ".chatvoice-preview::before{content:'';position:absolute;left:26px;bottom:-6px;width:10px;height:10px;background:rgba(22,27,34,.96);border-right:1px solid #f85149;border-bottom:1px solid #f85149;transform:rotate(45deg)}",
       ".chatvoice-preview::after{content:'▌';color:#f85149;animation:chatvoice-blink 1s step-end infinite}",
+      ".chatvoice-listening{animation:chatvoice-listen-pulse 1.6s ease-in-out infinite}",
+      "@keyframes chatvoice-listen-pulse{0%,100%{opacity:1}50%{opacity:.55}}",
       "@keyframes chatvoice-blink{50%{opacity:0}}",
       ".chatvoice-field{margin:10px 0}",
       ".chatvoice-label{display:block;font-size:12px;font-weight:500;margin-bottom:3px;opacity:.8}",
@@ -77,13 +82,51 @@ window.__ModuleLoader__.load({ id: "dsh-chatvoice", factory: (require) => {
   }
 
   let previewEl = null;
-  function showPreview(text) {
-    if (!document.body) return;
-    if (!previewEl) { previewEl = document.createElement("div"); previewEl.className = "chatvoice-preview"; document.body.appendChild(previewEl); }
-    previewEl.textContent = "🎤 " + (text || "…");
-    previewEl.style.display = "block";
+  let previewTa = null;
+  let previewTimer = null;
+
+  /** 把预览框锚定到输入框正上方（fixed 定位 + 坐标跟随, 上方放不下则放下方）。 */
+  function positionPreview() {
+    if (!previewEl || !previewTa || previewEl.style.display === "none") return;
+    try {
+      const rect = previewTa.getBoundingClientRect();
+      const w = Math.min(560, Math.max(260, rect.width));
+      previewEl.style.width = w + "px";
+      const h = previewEl.offsetHeight || 48;
+      const wantTop = rect.top - h - 14;
+      const top = wantTop < 8 ? rect.bottom + 14 : wantTop;
+      const left = Math.min(Math.max(8, rect.left), Math.max(8, window.innerWidth - w - 8));
+      previewEl.style.top = top + "px";
+      previewEl.style.left = left + "px";
+      previewEl.style.transform = "none";
+    } catch { /* ignore */ }
   }
-  function hidePreview() { if (previewEl) previewEl.style.display = "none"; }
+
+  function showPreview(text, ta, listening) {
+    if (!document.body) return;
+    if (!previewEl) {
+      previewEl = document.createElement("div");
+      previewEl.className = "chatvoice-preview";
+      document.body.appendChild(previewEl);
+    }
+    previewTa = ta || previewTa;
+    previewEl.style.opacity = "1";
+    previewEl.style.display = "block";
+    previewEl.textContent = "🎤 " + (text || "…");
+    previewEl.classList.toggle("chatvoice-listening", !!listening);
+    clearTimeout(previewTimer);
+    positionPreview();
+  }
+
+  function hidePreview() {
+    if (!previewEl) return;
+    previewEl.classList.remove("chatvoice-listening");
+    previewEl.style.opacity = "0";
+    clearTimeout(previewTimer);
+    previewTimer = setTimeout(() => {
+      if (previewEl && previewEl.style.opacity === "0") previewEl.style.display = "none";
+    }, 280);
+  }
 
   /* ══════════════════════════ 朗读 (speechSynthesis) ══════════════════════════ */
 
@@ -195,14 +238,14 @@ window.__ModuleLoader__.load({ id: "dsh-chatvoice", factory: (require) => {
   function setMicState(btn, state) {
     const on = state === "recording" || state === "starting";
     btn.classList.toggle("chatvoice-recording", on);
-    btn.title = on ? "识别中…再次点击停止" : "语音输入：点击开始，再次点击停止";
+    btn.title = on ? "聆听中…再次点击停止" : "语音输入：点击开始，持续聆听，再次点击停止";
     btn.setAttribute("aria-label", btn.title);
   }
 
   function toggleMic(ta, btn) {
     if (!srSupported()) { toast("当前浏览器不支持语音识别（请使用 Edge 或 Chrome）"); return; }
     if (!window.isSecureContext) { toast("非安全上下文无法使用麦克风：请通过 http://127.0.0.1:3080 访问 dsh web"); return; }
-    // 再次点击 = 停止
+    // 再次点击 = 停止（连续听写只在手动停止时结束）
     if (recognition) {
       try { recognition.stop(); } catch { /* ignore */ }
       recognition = null;
@@ -212,35 +255,44 @@ window.__ModuleLoader__.load({ id: "dsh-chatvoice", factory: (require) => {
     }
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     const rec = new SR();
+    const session = ++recognitionSession; // 本会话令牌: 旧会话的迟到回调一律作废
     rec.lang = cfg.recognitionLang || "zh-CN";
-    rec.continuous = false;   // 单次识别，点按开始/停止，简单可靠
+    rec.continuous = true;    // 持续聆听: 说完一句不自动停, 逐句累积
     rec.interimResults = true; // 实时中间结果
     rec.maxAlternatives = 1;
     srStartValue = ta && ta.value !== undefined ? ta.value : "";
     srFinals = "";
     srInterim = "";
+    srLastFinalIdx = -1;
     rec.onstart = () => setMicState(btn, "recording");
     rec.onresult = (e) => {
+      if (session !== recognitionSession) return; // 旧会话残留回调
       let finals = "", interim = "";
-      for (let i = e.resultIndex; i < e.results.length; i++) {
+      for (let i = Math.max(0, e.resultIndex); i < e.results.length; i++) {
         const r = e.results[i];
         const t = r[0] && r[0].transcript ? r[0].transcript : "";
-        if (r.isFinal) finals += t; else interim += t;
+        if (r.isFinal) {
+          if (i > srLastFinalIdx) { finals += t; srLastFinalIdx = i; } // 同一 final 只累积一次
+        } else {
+          interim += t;
+        }
       }
       if (finals) srFinals += finals;
       srInterim = interim;
       if (ta && ta.value !== undefined) setTextareaValue(ta, srStartValue + srFinals + srInterim);
-      showPreview(srFinals + srInterim);
+      showPreview(srFinals + srInterim, ta, false);
     };
     rec.onerror = (e) => {
+      if (session !== recognitionSession) return;
       const err = e && e.error;
       if (err === "not-allowed" || err === "service-not-allowed") toast("麦克风权限被拒绝：请在浏览器地址栏允许麦克风权限后重试");
       else if (err === "network") toast("语音识别服务连不上：请改用 Edge 浏览器（识别走 Azure 更稳定）或检查网络");
-      else if (err === "no-speech") toast("没有听到声音，请靠近麦克风再试一次");
       else if (err === "audio-capture") toast("未检测到麦克风设备");
+      else if (err === "no-speech") { /* 持续聆听中无语音属正常, 不打断不弹窗 */ }
       else if (err !== "aborted") toast("语音识别出错：" + (err || "unknown"));
     };
     rec.onend = () => {
+      if (session !== recognitionSession) return; // 旧会话残留回调
       recognition = null;
       setMicState(btn, "idle");
       hidePreview();
@@ -249,6 +301,7 @@ window.__ModuleLoader__.load({ id: "dsh-chatvoice", factory: (require) => {
     };
     recognition = rec;
     try {
+      showPreview("正在聆听…", ta, true); // 点下麦克风立即反馈, 不等第一个识别结果
       rec.start();
       setMicState(btn, "starting");
     } catch (e) {
@@ -267,7 +320,7 @@ window.__ModuleLoader__.load({ id: "dsh-chatvoice", factory: (require) => {
     btn.innerHTML = MIC_SVG;
     if (!srSupported()) { btn.disabled = true; btn.title = "浏览器不支持语音识别（请使用 Edge 或 Chrome）"; }
     else if (!window.isSecureContext) { btn.disabled = true; btn.title = "非安全上下文无法使用麦克风（请用 http://127.0.0.1:3080 访问）"; }
-    else btn.title = "语音输入：点击开始，再次点击停止";
+    else btn.title = "语音输入：点击开始，持续聆听，再次点击停止";
     btn.setAttribute("aria-label", btn.title);
     btn.addEventListener("click", (ev) => { ev.preventDefault(); ev.stopPropagation(); toggleMic(ta, btn); });
     return btn;
@@ -455,6 +508,10 @@ window.__ModuleLoader__.load({ id: "dsh-chatvoice", factory: (require) => {
   function boot() {
     injectCss();
     refreshVoices();
+    try {
+      window.addEventListener("scroll", positionPreview, true);
+      window.addEventListener("resize", positionPreview);
+    } catch { /* ignore */ }
     try {
       if (typeof speechSynthesis !== "undefined") {
         if (speechSynthesis.addEventListener) speechSynthesis.addEventListener("voiceschanged", refreshVoices);

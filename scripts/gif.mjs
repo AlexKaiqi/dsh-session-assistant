@@ -1,5 +1,5 @@
 // scripts/gif.mjs — 生成 README 演示 GIF（docs/demo.gif）。
-// 用假 SpeechRecognition 驱动真实 UI: 麦克风识别→文本入框→小喇叭朗读的闭环。
+// 用假 SpeechRecognition 驱动真实 UI: 聆听态→中间结果→连续听写入框→小喇叭朗读。
 // 依赖: puppeteer-core(devDep) + 系统 ffmpeg(合成 GIF)。
 import puppeteer from "puppeteer-core";
 import { execSync } from "node:child_process";
@@ -20,9 +20,10 @@ const STUB = `
     constructor() { this.lang = ""; this.continuous = false; this.interimResults = false; this.maxAlternatives = 1; this.onstart = null; this.onresult = null; this.onerror = null; this.onend = null; }
     start() {
       if (this.onstart) this.onstart();
+      // continuous=true 语义: 逐句累积, 不自动结束
       setTimeout(() => { if (this.onresult) this.onresult({ resultIndex: 0, results: [{ 0: { transcript: "你好" }, isFinal: false }] }); }, 500);
       setTimeout(() => { if (this.onresult) this.onresult({ resultIndex: 0, results: [{ 0: { transcript: "你好世界" }, isFinal: true }] }); }, 1200);
-      setTimeout(() => { if (this.onend) this.onend(); }, 1800);
+      setTimeout(() => { if (this.onresult) this.onresult({ resultIndex: 1, results: [{ 0: { transcript: "你好世界" }, isFinal: true }, { 0: { transcript: "继续听写" }, isFinal: true }] }); }, 1800);
     }
     stop() { if (this.onend) this.onend(); }
     abort() { if (this.onend) this.onend(); }
@@ -58,9 +59,9 @@ try {
   await page.goto(DSH_URL, { waitUntil: "networkidle2", timeout: 60000 });
   await sleep(2500);
 
-  // 新建干净会话（避免上一次运行的历史消息干扰画面）
+  // 新建干净会话
   try {
-    const newBtn = await page.evaluateHandle(() => [...document.querySelectorAll("button")].find((b) => b.getAttribute("aria-label") === "新建会话" || (b.getAttribute("aria-label") || "").includes("在“simple”中新建会话")));
+    const newBtn = await page.evaluateHandle(() => [...document.querySelectorAll("button")].find((b) => b.getAttribute("aria-label") === "新建会话" || (b.getAttribute("aria-label") || "").includes("新建会话")));
     if (newBtn.asElement()) { await newBtn.asElement().click(); await sleep(1500); }
   } catch { /* 若无按钮则用当前视图 */ }
 
@@ -69,16 +70,29 @@ try {
   await sleep(600);
   await page.screenshot({ path: join(FRAMES, "frame-01.png") });
 
-  // 开始识别 → 录制中（红色脉冲）+ 中间结果预览
+  // 点击 → 立即聆听态预览（呼吸动画, 锚定输入框上方）
   await mic.click();
-  await sleep(700);
+  await sleep(250);
   await page.screenshot({ path: join(FRAMES, "frame-02.png") });
 
-  // 识别结束 → 文本入框
-  await sleep(1700);
+  // 中间结果逐字上屏
+  await sleep(450);
   await page.screenshot({ path: join(FRAMES, "frame-03.png") });
 
-  // 注入一条助手回复到对话容器（真实会话中由流式渲染自动出现）
+  // 第一句 final 入框
+  await sleep(750);
+  await page.screenshot({ path: join(FRAMES, "frame-04.png") });
+
+  // 第二句继续累积（连续听写不自动停）
+  await sleep(750);
+  await page.screenshot({ path: join(FRAMES, "frame-05.png") });
+
+  // 手动停止
+  await mic.click();
+  await sleep(500);
+  await page.screenshot({ path: join(FRAMES, "frame-06.png") });
+
+  // 注入一条助手回复（真实会话中由流式渲染自动出现）
   await page.evaluate(() => {
     const container = document.querySelector("[data-chat-flow]") || document.body;
     const item = document.createElement("div");
@@ -92,17 +106,17 @@ try {
   const speakBtn = await page.waitForSelector('[data-chat-flow-key="gif-demo-msg"] [data-chatvoice-speak]', { timeout: 15000 });
   await speakBtn.scrollIntoView();
   await sleep(600);
-  await page.screenshot({ path: join(FRAMES, "frame-04.png") });
+  await page.screenshot({ path: join(FRAMES, "frame-07.png") });
 
   // 朗读中（停止态）
   await speakBtn.click();
   await sleep(500);
-  await page.screenshot({ path: join(FRAMES, "frame-05.png") });
+  await page.screenshot({ path: join(FRAMES, "frame-08.png") });
 
   // 停止
   await speakBtn.click();
   await sleep(400);
-  await page.screenshot({ path: join(FRAMES, "frame-06.png") });
+  await page.screenshot({ path: join(FRAMES, "frame-09.png") });
 
   console.log("frames captured");
 } finally {

@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.1 (2026-08-16)
+
+- 连续听写：点一次麦克风持续聆听，多句累积写入输入框，仅手动点击停止（不再说完一句自动停）
+- 语音预览框即时化：点击即显「正在聆听…」聆听态（呼吸动画），锚定输入框正上方跟随滚动，停止淡出
+- README 拆分中英两版（README.md 英文 / README.zh-CN.md 中文，顶部互链）
+- Continuous dictation: mic listens until manually stopped, sentences accumulate in the composer
+- Instant preview: "Listening…" state appears immediately on click, anchored above the composer with a fade-out on stop
+- README split into English (README.md) and Chinese (README.zh-CN.md) editions with cross-links
+
 ## 0.1.0 (2026-08-16)
 
 - MVP: composer 麦克风按钮 + SpeechRecognition 语音输入（中间结果实时上屏、权限/网络错误提示）
