@@ -225,8 +225,8 @@ try {
       conclBtnInDisc: !!(conclBtn && conclBtn.closest("[data-disclosure-row]")),
     };
   });
-  check("小喇叭只挂在最终结论上（思维链没有）", placement.conclHasBtn && !placement.thinkHasBtn, JSON.stringify(placement));
-  check("小喇叭位于结论正文内、不在 Think 行", placement.conclBtnInMd && !placement.conclBtnInDisc, JSON.stringify(placement));
+  check("思维链与结论都挂小喇叭（按用户接受的现状）", placement.thinkHasBtn && placement.conclHasBtn, JSON.stringify(placement));
+  check("小喇叭位于正文内、不在 Think 标题行", placement.conclBtnInMd && !placement.conclBtnInDisc, JSON.stringify(placement));
 
   if (speakBtn) {
     await speakBtn.click();
@@ -255,25 +255,37 @@ try {
     await cvTab1.asElement().click();
     await sleep(1200);
     await page.evaluate(() => {
-      const cb = document.querySelector('input[type="checkbox"]');
+      const cb = document.querySelector('.chatvoice-label input[type="checkbox"]');
       cb.click();
     });
     await sleep(300);
     const saveBtn1 = await page.evaluateHandle(() => [...document.querySelectorAll("button")].find((b) => (b.textContent || "").includes("保存设置")));
     await saveBtn1.asElement().click();
     await sleep(1500);
+    const autoCfg = await page.evaluate(() => fetch("/dsh-chatvoice/config").then((r) => r.json()).catch(() => null));
+    check("自动朗读开关已写入宿主配置", !!(autoCfg && autoCfg.value && autoCfg.value.autoSpeak === true), JSON.stringify(autoCfg && autoCfg.value));
     await page.keyboard.press("Escape");
     await sleep(600);
 
-    // 注入一条新「助手回复」，等待稳定性检测自动朗读
+    // 记录自动朗读前的 utterance 基线（此前有预热/手动点击产生的条目）
+    const autoBase = await page.evaluate(() => (window.__chatvoiceE2E && window.__chatvoiceE2E.synthesis ? window.__chatvoiceE2E.synthesis._u.length : 0));
+    // 按新 UI 结构注入: 思维链 → tool-call → 最终结论 → turn-tail（自动朗读应只读结论）
     await page.evaluate(() => {
-      const item = document.createElement("div");
-      item.setAttribute("data-chat-flow-kind", "assistant-step");
-      item.setAttribute("data-chat-flow-key", "e2e-auto-msg-1");
-      item.innerHTML =
-        '<div data-disclosure-row="true"><span>Think</span></div>' +
-        '<div class="_markdown_1nba0_5"><p>这是自动朗读测试文本。</p></div>';
-      document.body.appendChild(item);
+      const container = document.querySelector("[data-chat-flow]") || document.body;
+      const mk = (kind, key, mdText) => {
+        const item = document.createElement("div");
+        item.setAttribute("data-chat-flow-kind", kind);
+        item.setAttribute("data-chat-flow-key", key);
+        item.innerHTML = mdText
+          ? '<div data-disclosure-row="true"><span>Think</span></div><div class="_markdown_1nba0_5"><p>' + mdText + '</p></div>'
+          : '<div class="_call">tool</div>';
+        container.appendChild(item);
+        return item;
+      };
+      mk("assistant-step", "e2e-auto-think-1", "思维链文本不应被自动朗读。");
+      mk("tool-call", "e2e-auto-tool-1", null);
+      mk("assistant-step", "e2e-auto-msg-1", "这是自动朗读测试文本。");
+      mk("turn-tail", "e2e-auto-tail-1", null);
     });
     let autoUtt = null;
     const t1 = Date.now();
@@ -282,8 +294,10 @@ try {
       if (autoUtt && autoUtt.text && autoUtt.text.includes("自动朗读测试文本")) break;
       await sleep(500);
     }
-    const autoOk = autoUtt && autoUtt.text && autoUtt.text.includes("自动朗读测试文本");
-    check("自动朗读开关开启后新回复自动朗读", autoOk, autoUtt ? JSON.stringify(autoUtt.text).slice(0, 60) : "no auto utterance");
+    const autoOk = autoUtt && autoUtt.text && autoUtt.text.includes("自动朗读测试文本") && !autoUtt.text.includes("思维链文本");
+    check("自动朗读开关开启后新回复自动朗读（只读最终结论）", autoOk, autoUtt ? JSON.stringify(autoUtt.text).slice(0, 60) : "no auto utterance");
+    const autoUtterCount = await page.evaluate(() => (window.__chatvoiceE2E && window.__chatvoiceE2E.synthesis && window.__chatvoiceE2E.synthesis._u ? window.__chatvoiceE2E.synthesis._u.length : 0));
+    check("自动朗读只触发一次（思维链不读）", autoUtterCount === autoBase + 1, "base=" + autoBase + " now=" + autoUtterCount);
     const autoSpeaking = await page.evaluate(() => {
       const b = document.querySelector('[data-chat-flow-key="e2e-auto-msg-1"] [data-chatvoice-speak]');
       return !!(b && b.classList.contains("chatvoice-speaking"));
@@ -332,7 +346,7 @@ try {
 
       // 关掉自动朗读 + 改语速 1.5 → 保存
       await page.evaluate(() => {
-        const cb = document.querySelector('input[type="checkbox"]');
+        const cb = document.querySelector('.chatvoice-label input[type="checkbox"]');
         if (cb && cb.checked) cb.click();
       });
       await sleep(200);

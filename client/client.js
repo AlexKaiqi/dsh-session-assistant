@@ -51,9 +51,9 @@ window.__ModuleLoader__.load({ id: "dsh-chatvoice", factory: (require) => {
       ".chatvoice-speaking{color:#f85149!important;opacity:1!important;font-weight:700}",
       "@keyframes chatvoice-pulse{0%{box-shadow:0 0 0 0 rgba(248,81,73,.45)}70%{box-shadow:0 0 0 7px rgba(248,81,73,0)}100%{box-shadow:0 0 0 0 rgba(248,81,73,0)}}",
       ".chatvoice-toast{position:fixed;left:50%;bottom:110px;transform:translateX(-50%);z-index:2147483000;background:rgba(22,27,34,.95);color:#e6edf3;border:1px solid #30363d;border-radius:10px;padding:10px 16px;font-size:13px;line-height:1.5;max-width:min(560px,86vw);box-shadow:0 8px 24px rgba(0,0,0,.4);transition:opacity .25s}",
-      ".chatvoice-preview{position:fixed;z-index:2147483000;background:rgba(22,27,34,.96);color:#f0f6fc;border:1px solid #f85149;border-radius:10px;padding:10px 16px;font-size:13px;line-height:1.5;max-width:min(560px,86vw);box-shadow:0 8px 24px rgba(0,0,0,.4);transition:opacity .25s}",
-      ".chatvoice-preview::before{content:'';position:absolute;left:26px;bottom:-6px;width:10px;height:10px;background:rgba(22,27,34,.96);border-right:1px solid #f85149;border-bottom:1px solid #f85149;transform:rotate(45deg)}",
-      ".chatvoice-preview::after{content:'▌';color:#f85149;animation:chatvoice-blink 1s step-end infinite}",
+      ".chatvoice-preview{position:fixed;z-index:2147483000;background:rgba(22,27,34,.96);color:#f0f6fc;border:1px solid rgba(127,127,127,.45);border-radius:10px;padding:10px 16px;font-size:13px;line-height:1.5;max-width:min(560px,86vw);box-shadow:0 8px 24px rgba(0,0,0,.4);transition:opacity .25s}",
+      ".chatvoice-preview::before{content:'';position:absolute;left:26px;bottom:-6px;width:10px;height:10px;background:rgba(22,27,34,.96);border-right:1px solid rgba(127,127,127,.45);border-bottom:1px solid rgba(127,127,127,.45);transform:rotate(45deg)}",
+      ".chatvoice-preview::after{content:'▌';color:#58a6ff;animation:chatvoice-blink 1s step-end infinite}",
       ".chatvoice-listening{animation:chatvoice-listen-pulse 1.6s ease-in-out infinite}",
       "@keyframes chatvoice-listen-pulse{0%,100%{opacity:1}50%{opacity:.55}}",
       "@keyframes chatvoice-blink{50%{opacity:0}}",
@@ -198,6 +198,7 @@ window.__ModuleLoader__.load({ id: "dsh-chatvoice", factory: (require) => {
       return;
     }
     try { speechSynthesis.cancel(); } catch { /* ignore */ }
+    try { if (typeof speechSynthesis.resume === "function") speechSynthesis.resume(); } catch { /* ignore */ }
     const u = new SpeechSynthesisUtterance(text);
     const v = pickVoice();
     u.lang = (v && v.lang) || cfg.recognitionLang || "zh-CN";
@@ -218,6 +219,20 @@ window.__ModuleLoader__.load({ id: "dsh-chatvoice", factory: (require) => {
 
   function srSupported() {
     return !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+  }
+
+  // 浏览器自动播放策略: 无用户手势时 speechSynthesis 可能被静音。
+  // 在首次用户交互时播放一个 0 音量的空 utterance「解锁」, 之后自动朗读才能出声。
+  let warmedUp = false;
+  function warmUpSpeech() {
+    if (warmedUp) return;
+    warmedUp = true;
+    try {
+      const u = new SpeechSynthesisUtterance(" ");
+      u.volume = 0;
+      u.rate = 2;
+      speechSynthesis.speak(u);
+    } catch { /* ignore */ }
   }
 
   /** React 受控 textarea 用原生 value setter + input 事件（free-vision E2E 验证过的坑）。 */
@@ -257,6 +272,7 @@ window.__ModuleLoader__.load({ id: "dsh-chatvoice", factory: (require) => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     const rec = new SR();
     const session = ++recognitionSession; // 本会话令牌: 旧会话的迟到回调一律作废
+    warmUpSpeech();
     rec.lang = cfg.recognitionLang || "zh-CN";
     rec.continuous = true;    // 持续聆听: 说完一句不自动停, 逐句累积
     rec.interimResults = true; // 实时中间结果
@@ -343,27 +359,32 @@ window.__ModuleLoader__.load({ id: "dsh-chatvoice", factory: (require) => {
     });
   }
 
-  /** 某条 assistant-step 是否为「最终结论」: 其后紧跟的 flow item 不是 assistant-step（或已是最后一条）。 */
-  function isConclusion(item) {
-    let next = item.nextElementSibling;
-    while (next && !(next.getAttribute && next.getAttribute("data-chat-flow-kind"))) next = next.nextElementSibling;
-    const kind = next && next.getAttribute ? next.getAttribute("data-chat-flow-kind") : null;
-    return kind !== "assistant-step";
+  /** 计算「最终结论」条目集合（文档序）:
+   *  结论 = 其后紧跟 turn-tail / user / 没有后续的 assistant-step;
+   *  或流式进行中, 整个消息流的最后一条是 assistant-step（正在写结论）。
+   *  中间步骤（后面紧跟 tool-call / context / 别的 assistant-step）不算结论。 */
+  function computeFinalConclusions() {
+    const all = [...document.querySelectorAll('[data-chat-flow-kind]')];
+    const set = new Set();
+    for (let i = 0; i < all.length; i++) {
+      const it = all[i];
+      if (it.getAttribute("data-chat-flow-kind") !== "assistant-step") continue;
+      const next = all[i + 1];
+      const nk = next ? next.getAttribute("data-chat-flow-kind") : null;
+      if (nk !== "assistant-step" && nk !== "tool-call" && nk !== "context") set.add(it);
+    }
+    const last = all[all.length - 1];
+    if (last && last.getAttribute("data-chat-flow-kind") === "assistant-step") set.add(last);
+    return set;
   }
 
-  /** 只在最终结论正文右上角放小喇叭: 思维链/中间步骤一个都不放。 */
+  /** 小喇叭: 所有带正文的助手消息都挂一个悬浮按钮（思维链+结论, 用户接受的现状）。 */
   function injectSpeakers() {
     if (!document.body) return;
     document.querySelectorAll('[data-chat-flow-kind="assistant-step"]').forEach((item) => {
       const mds = item.querySelectorAll("[class*=markdown]");
       if (!mds.length) return;
-      const existing = item.querySelector("[data-chatvoice-speak]");
-      if (!isConclusion(item)) {
-        // 不再是结论（后续又有新回复）: 摘掉按钮
-        if (existing) existing.remove();
-        return;
-      }
-      if (existing) return;
+      if (item.querySelector("[data-chatvoice-speak]")) return;
       const md = mds[mds.length - 1];
       const key = item.getAttribute("data-chat-flow-key") || item.getAttribute("data-chat-anchor-key") || "";
       const btn = document.createElement("button");
@@ -374,6 +395,7 @@ window.__ModuleLoader__.load({ id: "dsh-chatvoice", factory: (require) => {
       btn.addEventListener("click", (ev) => {
         ev.preventDefault();
         ev.stopPropagation();
+        warmUpSpeech();
         speak(extractText(md), key);
       });
       try { md.style.position = "relative"; } catch { /* ignore */ }
@@ -386,10 +408,11 @@ window.__ModuleLoader__.load({ id: "dsh-chatvoice", factory: (require) => {
   function autoSpeakScan() {
     if (!cfg.autoSpeak) { pendingAuto.clear(); return; }
     const now = Date.now();
+    const conclusions = computeFinalConclusions();
     document.querySelectorAll('[data-chat-flow-kind="assistant-step"]').forEach((item) => {
       const mds = item.querySelectorAll("[class*=markdown]");
       if (!mds.length) return;
-      if (!isConclusion(item)) { pendingAuto.delete(item.getAttribute("data-chat-flow-key") || item.getAttribute("data-chat-anchor-key") || ""); return; }
+      if (!conclusions.has(item)) { pendingAuto.delete(item.getAttribute("data-chat-flow-key") || item.getAttribute("data-chat-anchor-key") || ""); return; }
       const md = mds[mds.length - 1];
       const key = item.getAttribute("data-chat-flow-key") || item.getAttribute("data-chat-anchor-key") || "";
       if (!key || spokenKeys.has(key)) return;
@@ -533,6 +556,7 @@ window.__ModuleLoader__.load({ id: "dsh-chatvoice", factory: (require) => {
         speechSynthesis.onvoiceschanged = refreshVoices;
       }
     } catch { /* ignore */ }
+    try { document.addEventListener("pointerdown", warmUpSpeech, { once: true, capture: true }); } catch { /* ignore */ }
     loadConfig();
     scan();
     startObserver();

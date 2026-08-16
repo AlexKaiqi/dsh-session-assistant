@@ -9,21 +9,26 @@ import { dirname, join } from "node:path";
 
 const DSH_URL = process.env.DSH_TEST_URL || "http://127.0.0.1:3091";
 const CHROME = process.env.CHROME_PATH || "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe";
+const LANG = process.env.DSH_GIF_LANG === "en" ? "en" : "zh"; // zh: docs/demo.gif; en: docs/demo.en.gif
 const ROOT_DIR = join(dirname(fileURLToPath(import.meta.url)), "..");
 const FRAMES = join(ROOT_DIR, "docs", "frames");
-const OUT_GIF = join(ROOT_DIR, "docs", "demo.gif");
+const OUT_GIF = join(ROOT_DIR, "docs", LANG === "en" ? "demo.en.gif" : "demo.gif");
+const T = LANG === "en"
+  ? { interim: "Hello", final1: "Hello world", final2: "keep dictating", prompt: "Reply with exactly one sentence: Hello world! This is the ChatVoice read-aloud demo.", heading: "Hello world 👋", body: "This is the ChatVoice read-aloud demo: click the speaker next to the reply and the AI answer is read out loud." }
+  : { interim: "你好", final1: "你好世界", final2: "继续听写", prompt: "请只回复一句：你好，世界！这是 ChatVoice 语音朗读演示。", heading: "你好，世界 👋", body: "这是 ChatVoice 的朗读演示：点击消息旁的小喇叭，AI 回复就会被读出来。" };
 
 const STUB = `
 (function () {
+  const T = window.__GIF_T || {};
   const E2E = (window.__chatvoiceE2E = window.__chatvoiceE2E || {});
   const fakeSR = class {
     constructor() { this.lang = ""; this.continuous = false; this.interimResults = false; this.maxAlternatives = 1; this.onstart = null; this.onresult = null; this.onerror = null; this.onend = null; }
     start() {
       if (this.onstart) this.onstart();
       // continuous=true 语义: 逐句累积, 不自动结束
-      setTimeout(() => { if (this.onresult) this.onresult({ resultIndex: 0, results: [{ 0: { transcript: "你好" }, isFinal: false }] }); }, 500);
-      setTimeout(() => { if (this.onresult) this.onresult({ resultIndex: 0, results: [{ 0: { transcript: "你好世界" }, isFinal: true }] }); }, 1200);
-      setTimeout(() => { if (this.onresult) this.onresult({ resultIndex: 1, results: [{ 0: { transcript: "你好世界" }, isFinal: true }, { 0: { transcript: "继续听写" }, isFinal: true }] }); }, 1800);
+      setTimeout(() => { if (this.onresult) this.onresult({ resultIndex: 0, results: [{ 0: { transcript: T.interim }, isFinal: false }] }); }, 500);
+      setTimeout(() => { if (this.onresult) this.onresult({ resultIndex: 0, results: [{ 0: { transcript: T.final1 }, isFinal: true }] }); }, 1200);
+      setTimeout(() => { if (this.onresult) this.onresult({ resultIndex: 1, results: [{ 0: { transcript: T.final1 }, isFinal: true }, { 0: { transcript: T.final2 }, isFinal: true }] }); }, 1800);
     }
     stop() { if (this.onend) this.onend(); }
     abort() { if (this.onend) this.onend(); }
@@ -55,7 +60,7 @@ const browser = await puppeteer.launch({
 });
 try {
   const page = await browser.newPage();
-  await page.evaluateOnNewDocument(STUB);
+  await page.evaluateOnNewDocument('window.__GIF_T = ' + JSON.stringify(T) + ';' + STUB);
   await page.goto(DSH_URL, { waitUntil: "networkidle2", timeout: 60000 });
   await sleep(2500);
 
@@ -93,14 +98,14 @@ try {
   await page.screenshot({ path: join(FRAMES, "frame-06.png") });
 
   // 真实对话: 发一条消息, 等真实 AI 回复 —— 回复上的小喇叭才是真实场景
-  await page.evaluate(() => {
+  await page.evaluate((tpl) => {
     const t = [...document.querySelectorAll("textarea")].find((x) => !x.readOnly);
     if (!t) return;
     const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set;
     if (t._valueTracker) t._valueTracker.setValue(t.value);
-    setter.call(t, "请只回复一句：你好，世界！这是 ChatVoice 语音朗读演示。");
+    setter.call(t, tpl.prompt);
     t.dispatchEvent(new Event("input", { bubbles: true }));
-  });
+  }, T);
   await sleep(300);
   const sendBtn = await page.evaluateHandle(() => [...document.querySelectorAll("button")].find((b) => b.getAttribute("aria-label") === "发送消息"));
   if (sendBtn.asElement()) { await sendBtn.asElement().click(); console.log("message sent"); }
@@ -111,16 +116,16 @@ try {
   } catch { console.log("real reply timeout — fallback fake message"); }
   if (!speakBtn) {
     // 兜底: 固定定位的假消息（保证 GIF 有可拍画面）
-    await page.evaluate(() => {
+    await page.evaluate((t) => {
       const item = document.createElement("div");
       item.setAttribute("data-chat-flow-kind", "assistant-step");
       item.setAttribute("data-chat-flow-key", "gif-demo-msg");
       item.style.cssText = "position:fixed;top:96px;left:50%;transform:translateX(-50%);width:560px;z-index:2147482000;";
       item.innerHTML =
         '<div data-disclosure-row="true"><span>assistant</span></div>' +
-        '<div class="_markdown_1nba0_5"><h2>你好，世界 👋</h2><p>这是 ChatVoice 的朗读演示：点击消息旁的小喇叭，AI 回复就会被读出来。</p></div>';
+        '<div class="_markdown_1nba0_5"><h2>' + t.heading + '</h2><p>' + t.body + '</p></div>';
       document.body.appendChild(item);
-    });
+    }, T);
     speakBtn = await page.waitForSelector('[data-chat-flow-key="gif-demo-msg"] [data-chatvoice-speak]', { timeout: 15000 });
   }
   await speakBtn.scrollIntoView();

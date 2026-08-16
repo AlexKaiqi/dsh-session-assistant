@@ -6,7 +6,7 @@
 > Everything runs on the browser's native Web Speech API — no backend, no key, nothing to register.
 
 <p align="center">
-  <img src="docs/demo.gif" alt="ChatVoice demo: speak → live text → read aloud" width="760"/>
+  <img src="docs/demo.en.gif" alt="ChatVoice demo: speak → live text → read aloud" width="760"/>
 </p>
 
 <p align="center">
