@@ -22,6 +22,16 @@ const T = LANG === "en"
   ? { interim: "Hello", final1: "Hello world", final2: "keep dictating", final3: "edit anytime", final4: "after deleting", prompt: "Reply with exactly one sentence: Hello world! This is the ChatVoice read-aloud demo." }
   : { interim: "你好", final1: "你好世界", final2: "继续听写", final3: "随时修改", final4: "删除之后", prompt: "请只回复一句：你好，世界！这是 ChatVoice 语音朗读演示。" };
 
+// 每帧讲解文案（叠加在画面顶部）
+const CAPS = {
+  "input-zh": ["① 待机：点麦克风开始语音输入", "② 点击立即进入聆听态", "③ 中间结果实时进气泡", "④ 确认句「你好世界」实时入框", "⑤ 持续聆听，说完不自动停", "⑥ 再点一下麦克风停止"],
+  "input-en": ['1. Idle: click the mic to start', '2. Listening — instant feedback', '3. Interim results in the bubble', '4. "Hello world" lands in the box live', '5. Keeps listening after you finish', '6. Click again to stop'],
+  "speak-zh": ["① 发送一条消息", "② AI 回复到达 + 小喇叭按钮", "③ 点小喇叭开始朗读（红色 ⏹）", "④ 再点一下停止朗读"],
+  "speak-en": ["1. Send a message", "2. Reply arrives with a speaker button", "3. Click to read aloud (red ⏹)", "4. Click again to stop"],
+  "edit-zh": ["① 待机：点麦克风开始", "② 聆听态，逐句累积入框", "③ 已识别：你好世界 继续听写", "④ 识别中直接打字修改", "⑤ 语音实时追加在修改之后", "⑥ 全选删除", "⑦ 删除后新识别仍实时入框", "⑧ 停止：删掉的不回填"],
+  "edit-en": ["1. Idle: click the mic", "2. Listening, sentences accumulate", "3. Recognized: hello world, keep dictating", "4. Type fixes while the mic runs", "5. Speech keeps appending live", "6. Select all and delete", "7. New recognition still lands live", "8. Stop: deleted text stays deleted"],
+};
+
 // 场景化假识别事件: [延迟ms, resultIndex, results]
 const F = (text, isFinal) => ({ 0: { transcript: text }, isFinal });
 const SR_EVENTS = (() => {
@@ -79,13 +89,65 @@ ${SR_LINES}
 
 mkdirSync(FRAMES, { recursive: true });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const shot = (page, n) => page.screenshot({ path: join(FRAMES, "frame-" + String(n).padStart(2, "0") + ".png") });
+// 清掉上一帧的特效
+const clearFx = (page) => page.evaluate(() => {
+  const z = document.getElementById("gif-zoom"); if (z) z.remove();
+  document.querySelectorAll("[data-gif-hl]").forEach((el) => {
+    el.style.outline = "";
+    el.style.boxShadow = "";
+    el.removeAttribute("data-gif-hl");
+  });
+});
+// fx: { zoom: "selector" } 红圈高亮 + 右下角 2× 放大特写; { ring: "selector" } 仅红圈
+const applyFx = (page, fx) => page.evaluate((f) => {
+  if (!f) return;
+  const t = document.querySelector(f.zoom || f.ring);
+  if (!t) return;
+  t.setAttribute("data-gif-hl", "1");
+  t.style.outline = "3px solid #f85149";
+  t.style.outlineOffset = "4px";
+  t.style.boxShadow = "0 0 0 6px rgba(248,81,73,.28)";
+  if (f.zoom) {
+    const clone = t.cloneNode(true);
+    clone.style.position = "static";
+    clone.style.top = "auto";
+    clone.style.left = "auto";
+    clone.style.right = "auto";
+    clone.style.bottom = "auto";
+    clone.style.transform = "none";
+    clone.style.width = "auto";
+    clone.style.maxWidth = "280px";
+    clone.style.whiteSpace = "normal";
+    const wrap = document.createElement("div");
+    wrap.id = "gif-zoom";
+    wrap.style.cssText = "position:fixed;right:30px;bottom:210px;z-index:2147483002;background:rgba(13,17,23,.95);border:2px solid #f85149;border-radius:16px;padding:16px 20px;transform:scale(2.1);transform-origin:bottom right;box-shadow:0 10px 32px rgba(0,0,0,.55);";
+    wrap.appendChild(clone);
+    document.body.appendChild(wrap);
+  }
+}, fx || null);
+const shot = async (page, n, cap, fx) => {
+  await clearFx(page);
+  await applyFx(page, fx);
+  // 每帧叠加讲解条（顶部居中, 深色药丸）
+  await page.evaluate((t) => {
+    let el = document.getElementById("gif-caption");
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "gif-caption";
+      el.style.cssText = "position:fixed;top:14px;left:50%;transform:translateX(-50%);z-index:2147483001;background:rgba(13,17,23,.94);color:#f0f6fc;border:1px solid rgba(127,127,127,.45);border-radius:12px;padding:11px 24px;font-size:19px;line-height:1.5;font-weight:600;box-shadow:0 8px 24px rgba(0,0,0,.5);white-space:nowrap;";
+      document.body.appendChild(el);
+    }
+    el.textContent = t || "";
+  }, cap || "");
+  await sleep(220);
+  return page.screenshot({ path: join(FRAMES, "frame-" + String(n).padStart(2, "0") + ".png") });
+};
 
 const browser = await puppeteer.launch({
   executablePath: CHROME,
   headless: "new",
   args: ["--no-sandbox", "--disable-gpu", "--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream"],
-  defaultViewport: { width: 1080, height: 720, deviceScaleFactor: 1 },
+  defaultViewport: { width: 1280, height: 800, deviceScaleFactor: 2 },
 });
 try {
   const page = await browser.newPage();
@@ -103,14 +165,14 @@ try {
   const getValue = () => page.evaluate(() => { const ta = [...document.querySelectorAll("textarea")].find((t) => !t.readOnly); return ta ? ta.value : ""; });
 
   if (SCENE === "input") {
-    await sleep(600); await shot(page, 1);            // 待机
-    await mic.click(); await sleep(250); await shot(page, 2);   // 聆听态气泡
-    await sleep(450); await shot(page, 3);            // 中间结果进气泡
-    await sleep(650); await shot(page, 4);            // 确认句入框
-    await sleep(700); await shot(page, 5);            // 持续聆听
-    await mic.click(); await sleep(500); await shot(page, 6);   // 停止
+    await sleep(600); await shot(page, 1, CAPS["input-" + LANG][0]);
+    await mic.click(); await sleep(250); await shot(page, 2, CAPS["input-" + LANG][1], { zoom: "[data-chatvoice-mic]" });      // 放大: 麦克风按钮（红色聆听态）
+    await sleep(450); await shot(page, 3, CAPS["input-" + LANG][2], { zoom: ".chatvoice-preview" });                                // 放大: 预览气泡（中间结果逐字上屏）
+    await sleep(650); await shot(page, 4, CAPS["input-" + LANG][3], { ring: "textarea" });                                          // 红圈: 输入框（确认句入框）
+    await sleep(700); await shot(page, 5, CAPS["input-" + LANG][4], { zoom: "[data-chatvoice-mic]" });                              // 放大: 麦克风按钮（持续聆听红点）
+    await mic.click(); await sleep(500); await shot(page, 6, CAPS["input-" + LANG][5]);
   } else if (SCENE === "speak") {
-    await sleep(600); await shot(page, 1);            // 待机
+    await sleep(600); await shot(page, 1, CAPS["speak-" + LANG][0]);
     await page.evaluate((tpl) => {
       const t = [...document.querySelectorAll("textarea")].find((x) => !x.readOnly);
       if (!t) return;
@@ -135,30 +197,30 @@ try {
       }, T);
       speakBtn = await page.waitForSelector('[data-chat-flow-key="gif-demo-msg"] [data-chatvoice-speak]', { timeout: 15000 });
     }
-    await speakBtn.scrollIntoView(); await sleep(800); await shot(page, 2);   // 回复 + 小喇叭
-    await speakBtn.click(); await sleep(500); await shot(page, 3);            // 朗读中 ⏹
-    await speakBtn.click(); await sleep(400); await shot(page, 4);            // 停止
+    await speakBtn.scrollIntoView(); await sleep(800); await shot(page, 2, CAPS["speak-" + LANG][1], { zoom: "[data-chatvoice-speak]" });   // 放大: 回复正文右上角的小喇叭按钮
+    await speakBtn.click(); await sleep(500); await shot(page, 3, CAPS["speak-" + LANG][2], { zoom: "[data-chatvoice-speak]" });          // 放大: 同一按钮变为红色 ⏹（朗读中）
+    await speakBtn.click(); await sleep(400); await shot(page, 4, CAPS["speak-" + LANG][3]);
   } else if (SCENE === "edit") {
-    await sleep(600); await shot(page, 1);            // 待机
-    await mic.click(); await sleep(250); await shot(page, 2);   // 聆听态
-    await sleep(1700); await shot(page, 3);            // 你好世界继续听写 入框（聆听中）
+    await sleep(600); await shot(page, 1, CAPS["edit-" + LANG][0]);
+    await mic.click(); await sleep(250); await shot(page, 2, CAPS["edit-" + LANG][1], { zoom: "[data-chatvoice-mic]" });   // 放大: 麦克风按钮（聆听态）
+    await sleep(1700); await shot(page, 3, CAPS["edit-" + LANG][2], { ring: "textarea" });                                          // 红圈: 输入框（逐句累积）
     const taEl = await composerHandle();
     await taEl.asElement().click();
     await taEl.evaluate((t) => { try { t.focus(); t.setSelectionRange(t.value.length, t.value.length); } catch { /* ignore */ } });
     await page.keyboard.type(LANG === "en" ? ", typed fix" : "，手动修改");
-    await sleep(400); await shot(page, 4);            // 打字修改
+    await sleep(400); await shot(page, 4, CAPS["edit-" + LANG][3], { ring: "textarea" });      // 红圈: 输入框（打字修改处）
     let v = "";
     const t3 = Date.now();
     while (Date.now() - t3 < 6000) { v = await getValue(); if (v.includes(T.final3)) break; await sleep(100); }
-    await sleep(300); await shot(page, 5);            // 语音实时追加在修改之后
+    await sleep(300); await shot(page, 5, CAPS["edit-" + LANG][4], { ring: "textarea" });      // 红圈: 输入框（语音追加在修改之后）
     await taEl.evaluate((t) => { try { t.focus(); t.select(); } catch { /* ignore */ } });
     await page.keyboard.press("Delete");
-    await sleep(300); await shot(page, 6);            // 全删
+    await sleep(300); await shot(page, 6, CAPS["edit-" + LANG][5], { ring: "textarea" });      // 红圈: 输入框（全选删除后为空）
     let v2 = "";
     const t4 = Date.now();
     while (Date.now() - t4 < 6000) { v2 = await getValue(); if (v2.includes(T.final4)) break; await sleep(100); }
-    await sleep(300); await shot(page, 7);            // 删除后新识别实时入框
-    await mic.click(); await sleep(500); await shot(page, 8);   // 停止（不复活）
+    await sleep(300); await shot(page, 7, CAPS["edit-" + LANG][6], { ring: "textarea" });      // 红圈: 输入框（删除后新识别实时入框）
+    await mic.click(); await sleep(500); await shot(page, 8, CAPS["edit-" + LANG][7]);
   }
 
   console.log("frames captured for", SCENE, LANG);
@@ -167,7 +229,7 @@ try {
 }
 
 const cmd =
-  'ffmpeg -y -framerate 1.5 -i "' + join(FRAMES, "frame-%02d.png") + '" -vf "scale=760:-1:flags=lanczos,split[s0][s1];[s0]palettegen=max_colors=128[p];[s1][p]paletteuse=dither=bayer" -loop 0 "' + OUT_GIF + '"';
+  'ffmpeg -y -framerate 1/2.2 -i "' + join(FRAMES, "frame-%02d.png") + '" -vf "scale=900:-1:flags=lanczos,split[s0][s1];[s0]palettegen=max_colors=128[p];[s1][p]paletteuse=dither=bayer" -loop 0 "' + OUT_GIF + '"';
 try {
   execSync(cmd, { encoding: "utf8", timeout: 120000, stdio: "pipe" });
   console.log("GIF written:", OUT_GIF, existsSync(OUT_GIF) ? "(exists)" : "(MISSING!)");
