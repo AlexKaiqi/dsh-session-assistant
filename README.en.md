@@ -22,7 +22,7 @@
 
 | # | Feature | Details |
 |---|---|---|
-| 1 | 🎤 Voice input | Mic button in the composer toolbar: click once and **keep talking** — live interim results appear as you speak, sentence after sentence accumulates; click again to stop and the text stays in the input box |
+| 1 | 🎤 Voice input | Mic button in the composer toolbar: click once and **keep talking** — live interim results appear as you speak, sentence after sentence accumulates; click again to stop and the text stays in the input box. **Type corrections anytime while listening** — recognition keeps running and newly recognized text is appended on stop without touching your edits |
 | 2 | 🔊 Read aloud | Speaker button on every assistant reply; click again to stop anytime |
 | 3 | 🔁 Auto-read | When enabled, new replies are read aloud automatically (interruptible at any time) |
 | 4 | ⚙️ Settings | dsh Settings → ChatVoice: recognition language / auto-read / voice / rate — **saved instantly, no restart** |
@@ -50,7 +50,7 @@ Restart dsh web (`dsh web`) and open `http://127.0.0.1:3080`.
 
 ## Usage
 
-1. **Voice input**: click 🎤 in the composer toolbar → allow the microphone permission → keep talking (interim results show live, sentences accumulate) → click 🎤 again to stop → the text is in the input box, press Enter to send
+1. **Voice input**: click 🎤 in the composer toolbar → allow the microphone permission → keep talking (interim results show live, sentences accumulate) → click 🎤 again to stop → the text is in the input box, press Enter to send. While listening you can **type directly to fix misrecognized words** — the bubble shows "Typing, still listening…" and later recognized text is appended when you stop, without overwriting your edits
 2. **Read aloud**: click 🔊 next to an assistant reply → it reads aloud (button turns into a red ⏹) → click again to stop
 3. **Auto-read**: Settings → ChatVoice → enable "Auto-read new replies" → save; new replies are read automatically
 

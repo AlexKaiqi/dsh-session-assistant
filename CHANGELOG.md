@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.6 (2026-08-16)
+
+- 边听边改（方案 D）：聆听中真实打字立即接管输入框（isTrusted 区分），识别继续累积；停止时只把接管后新识别的文本追加到框尾，不覆盖用户修改；气泡提示「正在打字修改，识别继续…」
+- Edit while listening: real keystrokes instantly take over the composer (isTrusted detection); recognition keeps accumulating and only the post-takeover text is appended on stop, never overwriting user edits; bubble hints "Typing, still listening…"
+
 ## 0.1.5 (2026-08-16)
 
 - README 恢复标准双文件结构：README.md 纯英文 / README.zh-CN.md 纯中文，每个文件仅顶部一行语言切换链接（不再双语混排）

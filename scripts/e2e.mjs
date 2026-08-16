@@ -53,6 +53,9 @@ const STUB = `
       setTimeout(() => { if (this.onresult) this.onresult({ resultIndex: 0, results: [{ 0: { transcript: "你好" }, isFinal: true }, { 0: { transcript: "世界" }, isFinal: true }] }); }, 700);
       setTimeout(() => { if (this.onresult) this.onresult({ resultIndex: 2, results: [{ 0: { transcript: "你好" }, isFinal: true }, { 0: { transcript: "世界" }, isFinal: true }, { 0: { transcript: "继续" }, isFinal: false }] }); }, 1000);
       setTimeout(() => { if (this.onresult) this.onresult({ resultIndex: 2, results: [{ 0: { transcript: "你好" }, isFinal: true }, { 0: { transcript: "世界" }, isFinal: true }, { 0: { transcript: "继续听写" }, isFinal: true }] }); }, 1300);
+      // 第三轮: 打字接管期间到达的识别结果（不覆盖用户输入, 停止时追加）
+      setTimeout(() => { if (this.onresult) this.onresult({ resultIndex: 3, results: [{ 0: { transcript: "你好" }, isFinal: true }, { 0: { transcript: "世界" }, isFinal: true }, { 0: { transcript: "继续听写" }, isFinal: true }, { 0: { transcript: "第三" }, isFinal: false }] }); }, 3000);
+      setTimeout(() => { if (this.onresult) this.onresult({ resultIndex: 3, results: [{ 0: { transcript: "你好" }, isFinal: true }, { 0: { transcript: "世界" }, isFinal: true }, { 0: { transcript: "继续听写" }, isFinal: true }, { 0: { transcript: "第三句" }, isFinal: true }] }); }, 3400);
     }
     stop() { if (this.onend) this.onend(); }
     abort() { if (this.onend) this.onend(); }
@@ -147,6 +150,27 @@ try {
     check("说完多句不自动停止（持续聆听中）", still.recording, "recording=" + still.recording);
     check("预览框实时显示识别文本", still.preview.includes("你好世界继续听写"), JSON.stringify(still.preview));
 
+    // ── 打字接管（方案 D）: 真实键入后插件不再覆盖输入框, 识别继续累积 ──
+    const taEl = await page.evaluateHandle(() => [...document.querySelectorAll("textarea")].find((t) => !t.readOnly));
+    await taEl.asElement().click();
+    await taEl.evaluate((t) => { try { t.focus(); t.setSelectionRange(t.value.length, t.value.length); } catch { /* ignore */ } });
+    await page.keyboard.type("，手动修改");
+    await sleep(400);
+    const takeover = await page.evaluate(() => {
+      const p = document.querySelector(".chatvoice-preview");
+      const ta = [...document.querySelectorAll("textarea")].find((t) => !t.readOnly);
+      return { value: ta ? ta.value : "", preview: p ? p.textContent : "", recording: !!document.querySelector(".chatvoice-recording") };
+    });
+    check("真实打字后输入框让位给键盘（用户文字保留）", takeover.value.includes("，手动修改"), JSON.stringify(takeover.value.slice(0, 30)));
+    check("接管期间气泡提示「正在打字修改」且仍在聆听", takeover.preview.includes("正在打字修改") && takeover.recording, JSON.stringify({ preview: takeover.preview, recording: takeover.recording }));
+    // 等第三轮假识别结果（3000/3400ms）: 不得覆盖用户修改
+    await sleep(1800);
+    const during = await page.evaluate(() => {
+      const ta = [...document.querySelectorAll("textarea")].find((t) => !t.readOnly);
+      return ta ? ta.value : "";
+    });
+    check("接管期间新识别文本不覆盖用户修改", during.includes("，手动修改") && !during.includes("第三句"), JSON.stringify(during.slice(0, 40)));
+
     // 手动停止: 文本保留、状态复位、预览淡出隐藏
     await micBtn.click();
     await sleep(700);
@@ -159,6 +183,7 @@ try {
       };
     });
     check("点击停止后结束聆听、文本保留", !stopped.recording && stopped.value.includes("你好世界继续听写"), JSON.stringify({ recording: stopped.recording, value: stopped.value.slice(0, 30) }));
+    check("停止时接管后新识别的文本追加到框尾", stopped.value.includes("，手动修改第三句"), JSON.stringify(stopped.value.slice(0, 40)));
     check("停止后预览框淡出隐藏", stopped.previewHidden, "hidden=" + stopped.previewHidden);
 
     // 停止后再点: 开新一轮, 在已有文本上继续累积

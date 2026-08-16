@@ -31,6 +31,9 @@ window.__ModuleLoader__.load({ id: "dsh-chatvoice", factory: (require) => {
   let srFinals = "";            // 已确认的识别文本（连续听写时逐句累积）
   let srInterim = "";           // 实时中间结果
   let srLastFinalIdx = -1;      // 已累积的最后一个 final 结果下标（去重）
+  let srActiveTa = null;        // 本次聆听绑定的输入框
+  let srTakeover = false;       // 用户已真实打字: 接管输入框, 插件不再覆盖
+  let srTakeoverFinalsLen = 0;  // 接管瞬间已累积 finals 的长度（停止时只追加此后的新文本）
   const pendingAuto = new Map();// 自动朗读稳定性检测: key -> {len, since}
 
   /* ══════════════════════════ 样式 ══════════════════════════ */
@@ -281,6 +284,9 @@ window.__ModuleLoader__.load({ id: "dsh-chatvoice", factory: (require) => {
     srFinals = "";
     srInterim = "";
     srLastFinalIdx = -1;
+    srActiveTa = ta || null;
+    srTakeover = false;
+    srTakeoverFinalsLen = 0;
     rec.onstart = () => setMicState(btn, "recording");
     rec.onresult = (e) => {
       if (session !== recognitionSession) return; // 旧会话残留回调
@@ -296,8 +302,8 @@ window.__ModuleLoader__.load({ id: "dsh-chatvoice", factory: (require) => {
       }
       if (finals) srFinals += finals;
       srInterim = interim;
-      if (ta && ta.value !== undefined) setTextareaValue(ta, srStartValue + srFinals + srInterim);
-      showPreview(srFinals + srInterim, ta, false);
+      if (ta && ta.value !== undefined && !srTakeover) setTextareaValue(ta, srStartValue + srFinals + srInterim);
+      showPreview(srTakeover ? "正在打字修改，识别继续…" : (srFinals + srInterim), ta, srTakeover);
     };
     rec.onerror = (e) => {
       if (session !== recognitionSession) return;
@@ -311,9 +317,20 @@ window.__ModuleLoader__.load({ id: "dsh-chatvoice", factory: (require) => {
     rec.onend = () => {
       if (session !== recognitionSession) return; // 旧会话残留回调
       recognition = null;
+      srActiveTa = null;
       setMicState(btn, "idle");
       hidePreview();
-      if (ta && ta.value !== undefined && (srFinals || srInterim)) setTextareaValue(ta, srStartValue + srFinals);
+      if (ta && ta.value !== undefined) {
+        if (srTakeover) {
+          // 打字接管: 只把接管点之后新识别出的文本追加到框尾, 不动用户改过的内容
+          const newPart = srFinals.slice(srTakeoverFinalsLen);
+          if (newPart) setTextareaValue(ta, ta.value + newPart);
+        } else if (srFinals || srInterim) {
+          setTextareaValue(ta, srStartValue + srFinals);
+        }
+      }
+      srTakeover = false;
+      srTakeoverFinalsLen = 0;
       try { ta && ta.focus(); } catch { /* ignore */ }
     };
     recognition = rec;
@@ -567,6 +584,19 @@ window.__ModuleLoader__.load({ id: "dsh-chatvoice", factory: (require) => {
       }
     } catch { /* ignore */ }
     try { document.addEventListener("pointerdown", warmUpSpeech, { once: true, capture: true }); } catch { /* ignore */ }
+    // 聆听中用户真实打字 → 输入框让位给键盘（方案 D: 打字接管）
+    try {
+      document.addEventListener("input", (ev) => {
+        if (!recognition || !ev.isTrusted || !srActiveTa) return;
+        const t = ev.target;
+        if (!(t && t.tagName === "TEXTAREA" && t === srActiveTa)) return;
+        if (!srTakeover) {
+          srTakeover = true;
+          srTakeoverFinalsLen = srFinals.length;
+        }
+        showPreview("正在打字修改，识别继续…", srActiveTa, true);
+      }, true);
+    } catch { /* ignore */ }
     loadConfig();
     scan();
     startObserver();
