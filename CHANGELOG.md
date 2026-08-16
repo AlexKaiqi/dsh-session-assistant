@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.5 (2026-08-16)
+
+- README 恢复标准双文件结构：README.md 纯英文 / README.zh-CN.md 纯中文，每个文件仅顶部一行语言切换链接（不再双语混排）
+- README restored to the standard two-file layout: English-only README.md + Chinese-only README.zh-CN.md, with a single top switcher line per file
+
 ## 0.1.4 (2026-08-16)
 
 - 自动朗读新增「范围」选项：只读最终结论（默认）/ 全部朗读（思维链+结论），设置页下拉切换
