@@ -1,4 +1,4 @@
-# ChatVoice 🎤🔊 — dsh-chatvoice
+# Talk to Text 🎤🔊 — dsh-talk-to-text
 
 **English** | [中文](README.md)
 > **Use natural voice to think with a context-aware model, continuously maintain an editable draft, and submit a mature instruction or finished text to the main Agent.**
@@ -24,11 +24,11 @@
   <img src="https://img.shields.io/badge/GPT-Realtime-4c8bf5" alt="GPT Realtime"/>
   <img src="https://img.shields.io/badge/Doubao-Realtime_Duplex-f05a28" alt="Doubao Realtime Duplex"/>
   <img src="https://img.shields.io/badge/Browser_fallback-no_API_key-brightgreen" alt="Browser fallback needs no API key"/>
-  <img src="https://img.shields.io/npm/v/dsh-chatvoice" alt="npm"/>
+  <img src="https://img.shields.io/npm/v/dsh-talk-to-text" alt="npm"/>
   <img src="https://img.shields.io/badge/license-MIT-lightgrey" alt="MIT"/>
 </p>
 
-**ChatVoice = Talk → Deliberate → Draft → Revise → Commit.** It is not merely speech-to-text: hold an interruptible full-duplex voice discussion with the Realtime model. Spoken replies never enter the draft; only a separate draft mutation can change the text, and submission to the main Agent remains explicit.
+**Talk to Text = Talk → Deliberate → Draft → Revise → Commit.** It is not merely speech-to-text: hold an interruptible full-duplex voice discussion with the Realtime model. Spoken replies never enter the draft; only a separate draft mutation can change the text, and submission to the main Agent remains explicit.
 
 ## Features
 
@@ -52,8 +52,8 @@
 ## Install
 
 ```bash
-dsh plugin --profile web add dsh-chatvoice
-# or manually: pnpm add dsh-chatvoice (dsh.profile.bundles reconciles automatically)
+dsh plugin --profile web add dsh-talk-to-text
+# or manually: pnpm add dsh-talk-to-text (dsh.profile.bundles reconciles automatically)
 ```
 
 Restart dsh web (`dsh web`) and open `http://127.0.0.1:3080`.
@@ -77,19 +77,19 @@ The model registry includes `doubao/realtime-duplex-3.0` (model `1.2.6.0`). Enab
 - `DOUBAO_APPID`
 - `DOUBAO_REALTIME_API_KEY`
 
-Saving the provider automatically opens a short connection and reports success only after authentication and Realtime session initialization. ChatVoice no longer stores these provider credentials.
+Saving the provider automatically opens a short connection and reports success only after authentication and Realtime session initialization. Talk to Text no longer stores these provider credentials.
 
 The host proxies the JSON WebSocket protocol at `wss://openspeech.bytedance.com/api/v3/duplex/realtime/dialogue`. Credentials, endpoint, instructions, and tool definitions stay server-owned. The browser streams 16 kHz PCM and plays queued 24 kHz PCM with immediate interruption. Native function calling supplies the same isolated `update_working_draft` side channel used by OpenAI.
 
 ### OpenAI Realtime input
 
-Start the DSH host with a standard API key. The key stays in the host process; it is never saved to `~/.dsh/chatvoice.json` or sent to the browser:
+Start the DSH host with a standard API key. The key stays in the host process; it is never saved to `~/.dsh/talk-to-text.json` or sent to the browser:
 
 ```bash
 OPENAI_API_KEY=your_api_key dsh web
 ```
 
-ChatVoice reads compatible GPT Realtime routes from `dsh-multi-model-provider` and `llm-pi-ai`. One route is selected automatically; registering more routes makes them appear in the model dropdown. The registered model, base URL, and credential reference remain authoritative.
+Talk to Text reads compatible GPT Realtime routes from `dsh-multi-model-provider` and `llm-pi-ai`. One route is selected automatically; registering more routes makes them appear in the model dropdown. The registered model, base URL, and credential reference remain authoritative.
 
 Realtime receives the current draft, workspace name, and six recent visible user/assistant messages as bounded application context. Hidden system prompts, tool arguments, and reasoning are excluded; the host caps the initial application context at 4,000 characters.
 

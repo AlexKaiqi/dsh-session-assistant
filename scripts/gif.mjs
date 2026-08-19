@@ -19,8 +19,8 @@ const FRAMES = join(ROOT_DIR, "docs", "frames", SCENE + "-" + LANG);
 const OUT_GIF = join(ROOT_DIR, "docs", "demo-" + SCENE + (LANG === "en" ? ".en" : "") + ".gif");
 
 const T = LANG === "en"
-  ? { interim: "Hello", final1: "Hello world", final2: "keep dictating", final3: "edit anytime", final4: "after deleting", prompt: "Reply with exactly one sentence: Hello world! This is the ChatVoice read-aloud demo." }
-  : { interim: "你好", final1: "你好世界", final2: "继续听写", final3: "随时修改", final4: "删除之后", prompt: "请只回复一句：你好，世界！这是 ChatVoice 语音朗读演示。" };
+  ? { interim: "Hello", final1: "Hello world", final2: "keep dictating", final3: "edit anytime", final4: "after deleting", prompt: "Reply with exactly one sentence: Hello world! This is the Talk to Text read-aloud demo." }
+  : { interim: "你好", final1: "你好世界", final2: "继续听写", final3: "随时修改", final4: "删除之后", prompt: "请只回复一句：你好，世界！这是 Talk to Text 语音朗读演示。" };
 
 // 每帧讲解文案（叠加在画面顶部）
 const CAPS = {

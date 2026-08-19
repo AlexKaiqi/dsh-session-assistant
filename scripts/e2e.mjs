@@ -1,8 +1,8 @@
-// scripts/e2e.mjs — dsh-chatvoice E2E against a live dsh web instance.
+// scripts/e2e.mjs — dsh-talk-to-text E2E against a live dsh web instance.
 // 用法: DSH_TEST_URL=http://127.0.0.1:3091 node scripts/e2e.mjs [--real-chat]
 // 覆盖: 工作区预置 / 麦克风按钮注入 / 假 SpeechRecognition 全链路(中间结果→final 入框) /
 //       小喇叭注入与朗读调用链(speechSynthesis.speak) / 停止打断 /
-//       设置页分组与保存(GET/POST /dsh-chatvoice/config) /
+//       设置页分组与保存(GET/POST /dsh-talk-to-text/config) /
 //       可选 --real-chat: 真实对话流中注入与朗读。
 import puppeteer from "puppeteer-core";
 
@@ -316,7 +316,7 @@ try {
     const settingsBtn1 = await page.evaluateHandle(() => [...document.querySelectorAll("button")].find((b) => (b.getAttribute("aria-label") || b.textContent || "").trim() === "设置"));
     await settingsBtn1.asElement().click();
     await sleep(1500);
-    const cvTab1 = await page.evaluateHandle(() => [...document.querySelectorAll("button")].find((b) => (b.textContent || "").trim() === "ChatVoice"));
+    const cvTab1 = await page.evaluateHandle(() => [...document.querySelectorAll("button")].find((b) => (b.textContent || "").trim() === "Talk to Text"));
     await cvTab1.asElement().click();
     await sleep(1200);
     await page.evaluate(() => {
@@ -327,7 +327,7 @@ try {
     const saveBtn1 = await page.evaluateHandle(() => [...document.querySelectorAll("button")].find((b) => (b.textContent || "").includes("保存设置")));
     await saveBtn1.asElement().click();
     await sleep(1500);
-    const autoCfg = await page.evaluate(() => fetch("/dsh-chatvoice/config").then((r) => r.json()).catch(() => null));
+    const autoCfg = await page.evaluate(() => fetch("/dsh-talk-to-text/config").then((r) => r.json()).catch(() => null));
     check("自动朗读开关已写入宿主配置", !!(autoCfg && autoCfg.value && autoCfg.value.autoSpeak === true), JSON.stringify(autoCfg && autoCfg.value));
     await page.keyboard.press("Escape");
     await sleep(600);
@@ -397,7 +397,7 @@ try {
     }
     await settingsBtn2.asElement().click();
     await sleep(1500);
-    const cvTab2 = await page.evaluateHandle(() => [...document.querySelectorAll("button")].find((b) => (b.textContent || "").trim() === "ChatVoice"));
+    const cvTab2 = await page.evaluateHandle(() => [...document.querySelectorAll("button")].find((b) => (b.textContent || "").trim() === "Talk to Text"));
     await cvTab2.asElement().click();
     await sleep(1200);
     await page.select(".chatvoice-mode", "all");
@@ -405,7 +405,7 @@ try {
     const saveBtn2 = await page.evaluateHandle(() => [...document.querySelectorAll("button")].find((b) => (b.textContent || "").includes("保存设置")));
     await saveBtn2.asElement().click();
     await sleep(1500);
-    const allCfg = await page.evaluate(() => fetch("/dsh-chatvoice/config").then((r) => r.json()).catch(() => null));
+    const allCfg = await page.evaluate(() => fetch("/dsh-talk-to-text/config").then((r) => r.json()).catch(() => null));
     check("自动朗读范围已切换为「全部朗读」", !!(allCfg && allCfg.value && allCfg.value.autoSpeakMode === "all"), JSON.stringify(allCfg && allCfg.value));
     await page.keyboard.press("Escape");
     await sleep(600);
@@ -458,9 +458,9 @@ try {
     }
     await settingsBtn.asElement().click();
     await sleep(1500);
-    const chatvoiceTab = await page.evaluateHandle(() => [...document.querySelectorAll("button")].find((b) => (b.textContent || "").trim() === "ChatVoice"));
+    const chatvoiceTab = await page.evaluateHandle(() => [...document.querySelectorAll("button")].find((b) => (b.textContent || "").trim() === "Talk to Text"));
     const hasTab = !!chatvoiceTab.asElement();
-    check("设置页出现 ChatVoice 分组", hasTab);
+    check("设置页出现 Talk to Text 分组", hasTab);
     if (hasTab) {
       await chatvoiceTab.asElement().click();
       await sleep(1200);
@@ -494,7 +494,7 @@ try {
       await sleep(1500);
       const saved = await page.evaluate(() => document.body.innerText.includes("已保存，立即生效"));
       check("设置保存成功（页面反馈）", saved);
-      const serverCfg = await page.evaluate(() => fetch("/dsh-chatvoice/config").then((r) => r.json()).catch((e) => ({ fetchErr: String(e) })));
+      const serverCfg = await page.evaluate(() => fetch("/dsh-talk-to-text/config").then((r) => r.json()).catch((e) => ({ fetchErr: String(e) })));
       check("设置持久化到宿主（GET /config 返回 rate=1.5）", serverCfg && serverCfg.value && serverCfg.value.rate === 1.5, JSON.stringify(serverCfg && serverCfg.value));
       check("自动朗读已复位为关闭", serverCfg && serverCfg.value && serverCfg.value.autoSpeak === false, JSON.stringify(serverCfg && serverCfg.value));
       check("自动朗读范围复位为只读结论", serverCfg && serverCfg.value && serverCfg.value.autoSpeakMode === "final", JSON.stringify(serverCfg && serverCfg.value));
@@ -502,7 +502,7 @@ try {
       await sleep(600);
     }
   } catch (e) {
-    check("设置页 ChatVoice 分组", false, String(e).slice(0, 160));
+    check("设置页 Talk to Text 分组", false, String(e).slice(0, 160));
   }
 
   /* ── 5. 可选: 真实对话流 ── */

@@ -1,4 +1,4 @@
-# ChatVoice 🎤🔊 — dsh-chatvoice
+# Talk to Text 🎤🔊 — dsh-talk-to-text
 
 [English](README.en.md) | **中文**
 
@@ -25,11 +25,11 @@
   <img src="https://img.shields.io/badge/GPT-Realtime-4c8bf5" alt="GPT Realtime"/>
   <img src="https://img.shields.io/badge/豆包-Realtime_Duplex-f05a28" alt="豆包 Realtime Duplex"/>
   <img src="https://img.shields.io/badge/浏览器回退-免_API_Key-brightgreen" alt="浏览器回退免 API Key"/>
-  <img src="https://img.shields.io/npm/v/dsh-chatvoice" alt="npm"/>
+  <img src="https://img.shields.io/npm/v/dsh-talk-to-text" alt="npm"/>
   <img src="https://img.shields.io/badge/license-MIT-lightgrey" alt="MIT"/>
 </p>
 
-**ChatVoice = Talk → Deliberate → Draft → Revise → Commit**。它不是单纯的语音转文字：用户可以与 Realtime 模型进行可随时插话的双工语音讨论；模型语音回复不进入草稿，只有独立的草稿修改操作才会改变文本，且只有用户明确提交时才发给主 Agent。
+**Talk to Text = Talk → Deliberate → Draft → Revise → Commit**。它不是单纯的语音转文字：用户可以与 Realtime 模型进行可随时插话的双工语音讨论；模型语音回复不进入草稿，只有独立的草稿修改操作才会改变文本，且只有用户明确提交时才发给主 Agent。
 
 ## 功能
 
@@ -53,8 +53,8 @@
 ## 安装
 
 ```bash
-dsh plugin --profile web add dsh-chatvoice
-# 或手动: pnpm add dsh-chatvoice（dsh.profile.bundles 会自动 reconcile）
+dsh plugin --profile web add dsh-talk-to-text
+# 或手动: pnpm add dsh-talk-to-text（dsh.profile.bundles 会自动 reconcile）
 ```
 
 重启 dsh web（dsh web），打开 http://127.0.0.1:3080 即可。
@@ -78,7 +78,7 @@ dsh plugin --profile web add dsh-chatvoice
 - `DOUBAO_APPID`
 - `DOUBAO_REALTIME_API_KEY`
 
-保存 Provider 时会自动建立一次短连接，只有鉴权和 Realtime 会话初始化成功才显示测试通过。ChatVoice 本身不再保存这些凭据。
+保存 Provider 时会自动建立一次短连接，只有鉴权和 Realtime 会话初始化成功才显示测试通过。Talk to Text 本身不再保存这些凭据。
 
 豆包使用 `wss://openspeech.bytedance.com/api/v3/duplex/realtime/dialogue` 的 JSON WebSocket 协议。浏览器只连接同源 DSH host；App ID/API Key、上游地址、system instructions 和工具定义都由 host 控制，不会下发长期密钥。音频以 16 kHz PCM 上行、24 kHz PCM 下行，支持插话取消。
 
@@ -88,7 +88,7 @@ Duplex 原生函数调用提供 `update_working_draft` 侧通道。用户转写�
 
 插件从 `dsh-multi-model-provider` 和 `llm-pi-ai` 的注册设置中读取兼容的 GPT Realtime 路由。只有一个时自动选中；注册多个后，设置页自动显示下拉选择。模型、Base URL 和凭据引用均以注册表为准。
 
-凭据由 DSH host 安全解析，不会保存到 `~/.dsh/chatvoice.json`，也不会下发浏览器。如果注册路由使用 `OPENAI_API_KEY`，也可通过环境变量提供：
+凭据由 DSH host 安全解析，不会保存到 `~/.dsh/talk-to-text.json`，也不会下发浏览器。如果注册路由使用 `OPENAI_API_KEY`，也可通过环境变量提供：
 
 ```bash
 OPENAI_API_KEY=你的_API_Key dsh web
@@ -137,13 +137,13 @@ Realtime 的音频输出是讨论主通道；`update_working_draft` 函数调用
 
 ## English quick start
 
-**ChatVoice** uses a registered GPT Realtime model as a context-aware voice deliberation and drafting workspace, with browser SpeechRecognition as an append-only fallback and speechSynthesis for read-aloud.
+**Talk to Text** uses a registered GPT Realtime model as a context-aware voice deliberation and drafting workspace, with browser SpeechRecognition as an append-only fallback and speechSynthesis for read-aloud.
 
 ```bash
-dsh plugin --profile web add dsh-chatvoice
+dsh plugin --profile web add dsh-talk-to-text
 ```
 
-Then open http://127.0.0.1:3080, click the 🎤 in the composer toolbar, allow mic permission, and speak. Click 🔊 on any assistant reply to hear it. Configure language / auto-read / voice / rate under Settings → ChatVoice.
+Then open http://127.0.0.1:3080, click the 🎤 in the composer toolbar, allow mic permission, and speak. Click 🔊 on any assistant reply to hear it. Configure language / auto-read / voice / rate under Settings → Talk to Text.
 
 ## License
 

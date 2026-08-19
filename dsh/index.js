@@ -1,4 +1,4 @@
-// DeepSeek Harness (dsh) plugin: ChatVoice — 语音输入 + AI 回复朗读闭环。
+// DeepSeek Harness (dsh) plugin: Talk to Text — 语音输入 + AI 回复朗读闭环。
 // Voice input + read-aloud for text-first dsh sessions.
 //
 //   - 语音输入: browser SpeechRecognition，或注册的 GPT Realtime 思考/草稿工作台
@@ -7,8 +7,8 @@
 //
 // Host 端做三件事:
 //   1. export Config (dsh web 设置页的 schema; 供表单渲染/校验)
-//   2. webServer 路由 GET/POST /dsh-chatvoice/config —— 客户端读取/保存设置,
-//      持久化到 ~/.dsh/chatvoice.json (保存即时生效, 无需重启, 与
+//   2. webServer 路由 GET/POST /dsh-talk-to-text/config —— 客户端读取/保存设置,
+//      持久化到 ~/.dsh/talk-to-text.json (保存即时生效, 无需重启, 与
 //      dsh-free-vision 的已验证模式一致)
 //   3. 使用模型页注册路由的凭据初始化 Realtime WebRTC 讨论与草稿会话
 //
@@ -64,20 +64,24 @@ export const Config = z.object({
     .default(1.0),
 })
 
-export const name = 'dsh-chatvoice'
+export const name = 'dsh-talk-to-text'
 export const inject = []
 
 /** Persistent settings file (written by the settings UI route). */
-const CONFIG_PATH = homedir() + '/.dsh/chatvoice.json'
+const CONFIG_PATH = homedir() + '/.dsh/talk-to-text.json'
+const LEGACY_CONFIG_PATH = homedir() + '/.dsh/chatvoice.json'
 
-/** Read the persistent settings file; {} on any failure. */
+/** Read current settings, falling back to the pre-rename location once. */
 function readSettingsFile() {
-  try {
-    const parsed = JSON.parse(readFileSync(CONFIG_PATH, 'utf-8'))
-    return parsed && typeof parsed === 'object' ? parsed : {}
-  } catch {
-    return {}
+  for (const path of [CONFIG_PATH, LEGACY_CONFIG_PATH]) {
+    try {
+      const parsed = JSON.parse(readFileSync(path, 'utf-8'))
+      if (parsed && typeof parsed === 'object') return parsed
+    } catch {
+      // Try the legacy path, then fall back to defaults.
+    }
   }
+  return {}
 }
 
 /** Persist settings (server side, called from the web UI route). */
@@ -267,7 +271,7 @@ function voiceWorkspaceTool() {
 function realtimeEditorInstructions(context = '') {
   const bounded = normalizeTranscriptionContext(context)
   return [
-    'You are ChatVoice, a context-aware thinking and drafting partner between the user and a coding agent.',
+    'You are Talk to Text, a context-aware thinking and drafting partner between the user and a coding agent.',
     'The user may think aloud, ask a question, explore alternatives, dictate content, edit earlier text, or ask you to finalize it.',
     'Hold a natural full-duplex voice conversation. Reply to the user in audio, keep replies concise, and allow the user to interrupt you.',
     'Keep the spoken conversation and the editable draft strictly separate. What you say is discussion and must not enter the draft unless the user explicitly dictates it, requests an edit, or accepts it as part of the result.',
@@ -315,7 +319,7 @@ function realtimeCallsUrl(providerBaseURL = process.env.OPENAI_BASE_URL || 'http
 }
 
 function safetyIdentifier() {
-  return createHash('sha256').update(`dsh-chatvoice:${homedir()}`).digest('hex')
+  return createHash('sha256').update(`dsh-talk-to-text:${homedir()}`).digest('hex')
 }
 
 async function readBody(req, maxBytes = 256 * 1024) {
@@ -384,7 +388,7 @@ async function generateFinalDraft(scope, context, draft) {
   const messages = [{
     id: randomUUID(),
     role: 'user',
-    source: { kind: 'plugin', plugin: 'dsh-chatvoice' },
+    source: { kind: 'plugin', plugin: 'dsh-talk-to-text' },
     content: [{ type: 'text', text: `Finalize the working draft from this JSON input:\n${framed}` }],
   }]
   const signal = AbortSignal.timeout(45_000)
@@ -474,7 +478,7 @@ export function apply(ctx, config = {}) {
       }
       scope.webServer.register({
         kind: 'exact',
-        path: '/dsh-chatvoice/config',
+        path: '/dsh-talk-to-text/config',
         handler: async (req, res) => {
           if (req.method === 'GET') {
             const state = await publicState()
@@ -501,7 +505,7 @@ export function apply(ctx, config = {}) {
       })
       scope.webServer.register({
         kind: 'exact',
-        path: '/dsh-chatvoice/realtime/doubao/probe',
+        path: '/dsh-talk-to-text/realtime/doubao/probe',
         handler: async (req, res) => {
           if (req.method !== 'POST') {
             res.writeHead(405, { allow: 'POST' })
@@ -533,15 +537,15 @@ export function apply(ctx, config = {}) {
       })
       scope.webServer.register({
         kind: 'exact',
-        path: '/dsh-chatvoice/draft/finalize',
+        path: '/dsh-talk-to-text/draft/finalize',
         handler: async (req, res) => {
           if (req.method !== 'POST') {
             res.writeHead(405, { allow: 'POST' })
             res.end()
             return
           }
-          if (req.headers['x-dsh-chatvoice'] !== '1') {
-            sendJson(res, 403, { ok: false, error: 'missing ChatVoice request marker' })
+          if (req.headers['x-dsh-talk-to-text'] !== '1') {
+            sendJson(res, 403, { ok: false, error: 'missing Talk to Text request marker' })
             return
           }
           try {
@@ -555,15 +559,15 @@ export function apply(ctx, config = {}) {
       })
       scope.webServer.register({
         kind: 'exact',
-        path: '/dsh-chatvoice/realtime/session',
+        path: '/dsh-talk-to-text/realtime/session',
         handler: async (req, res) => {
           if (req.method !== 'POST') {
             res.writeHead(405, { allow: 'POST' })
             res.end()
             return
           }
-          if (req.headers['x-dsh-chatvoice'] !== '1') {
-            sendJson(res, 403, { ok: false, error: 'missing ChatVoice request marker' })
+          if (req.headers['x-dsh-talk-to-text'] !== '1') {
+            sendJson(res, 403, { ok: false, error: 'missing Talk to Text request marker' })
             return
           }
           const models = await discoverRealtimeModels(scope)

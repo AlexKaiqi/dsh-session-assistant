@@ -1,7 +1,7 @@
 {
-  "name": "dsh-chatvoice",
+  "name": "dsh-talk-to-text",
   "version": "0.3.0",
-  "description": "ChatVoice — full-duplex contextual voice deliberation with tool-controlled editable drafting for DeepSeek Harness.",
+  "description": "Talk to Text — full-duplex contextual voice deliberation with tool-controlled editable drafting for DeepSeek Harness.",
   "type": "module",
   "main": "./dsh/index.js",
   "exports": {
@@ -71,12 +71,12 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/FuzzySoul/dsh-chatvoice.git"
+    "url": "git+https://github.com/AlexKaiqi/dsh-talk-to-text.git"
   },
   "bugs": {
-    "url": "https://github.com/FuzzySoul/dsh-chatvoice/issues"
+    "url": "https://github.com/AlexKaiqi/dsh-talk-to-text/issues"
   },
-  "homepage": "https://github.com/FuzzySoul/dsh-chatvoice#readme",
+  "homepage": "https://github.com/AlexKaiqi/dsh-talk-to-text#readme",
   "author": "FuzzySoul",
   "devDependencies": {
     "puppeteer-core": "^25.7.0"

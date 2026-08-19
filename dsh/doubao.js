@@ -100,11 +100,11 @@ function localError(socket, message, details = {}) {
 }
 
 function parseLocalMessage(data, isBinary) {
-  if (isBinary) throw new Error('ChatVoice Doubao transport accepts JSON text frames only')
+  if (isBinary) throw new Error('Talk to Text Doubao transport accepts JSON text frames only')
   const text = Buffer.isBuffer(data) ? data.toString('utf8') : String(data)
-  if (Buffer.byteLength(text, 'utf8') > 512 * 1024) throw new Error('ChatVoice Realtime frame is too large')
+  if (Buffer.byteLength(text, 'utf8') > 512 * 1024) throw new Error('Talk to Text Realtime frame is too large')
   const parsed = JSON.parse(text)
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('invalid ChatVoice Realtime event')
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('invalid Talk to Text Realtime event')
   return parsed
 }
 
@@ -145,7 +145,7 @@ function safeUpstreamEvent(message, sessionState) {
     case 'session.close':
       return { type: 'session.close', event_id: randomUUID() }
     default:
-      throw new Error(`unsupported ChatVoice Realtime event: ${String(message.type || '')}`)
+      throw new Error(`unsupported Talk to Text Realtime event: ${String(message.type || '')}`)
   }
 }
 
@@ -200,7 +200,7 @@ export function probeDoubaoDuplex({ endpoint, appId, apiKey, model }, timeoutMs 
 export function registerDoubaoDuplexUpgrade(scope, options) {
   const acceptor = new WebSocketServer({ noServer: true })
   const disposeRoute = scope.webServer.registerUpgrade({
-    path: '/dsh-chatvoice/realtime/doubao',
+    path: '/dsh-talk-to-text/realtime/doubao',
     handler(req, socket, head) {
       if (!isSameOriginUpgrade(req)) {
         rejectUpgrade(socket)
@@ -321,7 +321,7 @@ export function registerDoubaoDuplexUpgrade(scope, options) {
       for (const socket of acceptor.clients) socket.terminate()
       acceptor.close()
       disposeRoute()
-    }, 'dsh-chatvoice.doubao-realtime')
+    }, 'dsh-talk-to-text.doubao-realtime')
   }
   return { acceptor, disposeRoute }
 }

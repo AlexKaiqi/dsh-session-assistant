@@ -221,7 +221,7 @@ test('discovers compatible models from the live LLM registry even when the setti
 test('builds a full-duplex Realtime workspace with optional draft mutations', () => {
   const session = buildRealtimeEditorSession(
     'gpt-realtime-2.1',
-    'Workspace: dsh-chatvoice\nCurrent editable draft: keep RTCPeerConnection',
+    'Workspace: dsh-talk-to-text\nCurrent editable draft: keep RTCPeerConnection',
   )
   assert.deepEqual(session, {
     type: 'realtime',
@@ -284,13 +284,13 @@ test('Realtime session route resolves the registered model and keeps its credent
 
   try {
     const route = captureRoutes({ openaiRealtimeModel: 'llm:openai/gpt-realtime-2.1' })
-      .find((entry) => entry.path === '/dsh-chatvoice/realtime/session')
+      .find((entry) => entry.path === '/dsh-talk-to-text/realtime/session')
     assert.ok(route)
     const res = response()
     await route.handler(request(JSON.stringify({
       sdp: 'v=0\r\no=offer',
       context: 'Current draft: keep RTCPeerConnection',
-    }), { 'x-dsh-chatvoice': '1', 'content-type': 'application/json' }), res)
+    }), { 'x-dsh-talk-to-text': '1', 'content-type': 'application/json' }), res)
 
     assert.equal(res.status, 200)
     assert.equal(res.body, 'v=0\r\no=answer')
@@ -312,7 +312,7 @@ test('Realtime session route resolves the registered model and keeps its credent
 })
 
 test('Realtime session route refuses to spend API usage without the same-origin marker', async () => {
-  const route = captureRoutes().find((entry) => entry.path === '/dsh-chatvoice/realtime/session')
+  const route = captureRoutes().find((entry) => entry.path === '/dsh-talk-to-text/realtime/session')
   const res = response()
   await route.handler(request('v=0\r\no=offer'), res)
   assert.equal(res.status, 403)
@@ -335,12 +335,12 @@ test('draft finalize route uses an auto-discovered registered text model and ret
       yield { type: 'finish', reason: { kind: 'stop' } }
     },
   }
-  const route = captureRoutes({}, { llm }).find((entry) => entry.path === '/dsh-chatvoice/draft/finalize')
+  const route = captureRoutes({}, { llm }).find((entry) => entry.path === '/dsh-talk-to-text/draft/finalize')
   const res = response()
   await route.handler(request(JSON.stringify({
     draft: '初稿',
     context: 'Voice discussion: keep the confirmed constraint',
-  }), { 'x-dsh-chatvoice': '1', 'content-type': 'application/json' }), res)
+  }), { 'x-dsh-talk-to-text': '1', 'content-type': 'application/json' }), res)
   const body = JSON.parse(res.body)
   assert.equal(res.status, 200)
   assert.equal(body.draft, '成熟的最终文本')
@@ -350,7 +350,7 @@ test('draft finalize route uses an auto-discovered registered text model and ret
 })
 
 test('config route auto-selects the only registered Realtime model', async () => {
-  const route = captureRoutes().find((entry) => entry.path === '/dsh-chatvoice/config')
+  const route = captureRoutes().find((entry) => entry.path === '/dsh-talk-to-text/config')
   const req = request('')
   req.method = 'GET'
   const res = response()
@@ -385,8 +385,8 @@ test('the Models provider owns Doubao credentials and the probe requires an expl
     },
   }]
   const routes = captureRoutes({}, { descriptors: doubao, credentials })
-  assert.equal(routes.find((entry) => entry.path === '/dsh-chatvoice/credentials'), undefined)
-  const route = routes.find((entry) => entry.path === '/dsh-chatvoice/realtime/doubao/probe')
+  assert.equal(routes.find((entry) => entry.path === '/dsh-talk-to-text/credentials'), undefined)
+  const route = routes.find((entry) => entry.path === '/dsh-talk-to-text/realtime/doubao/probe')
   const res = response()
   const req = request('')
   req.method = 'POST'

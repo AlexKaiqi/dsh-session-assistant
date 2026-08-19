@@ -1,24 +1,24 @@
-// dsh-chatvoice web client — DOM 注入 + browser/OpenAI Realtime 识别 + speechSynthesis。
-// ChatVoice: voice input + read-aloud for the DeepSeek Harness web GUI.
+// dsh-talk-to-text web client — DOM 注入 + browser/OpenAI Realtime 识别 + speechSynthesis。
+// Talk to Text: voice input + read-aloud for the DeepSeek Harness web GUI.
 //
 // 模块格式沿用 dsh-free-vision 的已验证写法: window.__ModuleLoader__.load
 // 工厂 + exports { name, inject, apply }; 设置页通过 ctx.slots.inject
 // ('settings.section') 注册; 输入框麦克风与消息小喇叭用 MutationObserver
 // 注入（选择器尽量宽松, 依赖 data- 属性而不是易变的 CSS module 哈希类名）。
 //
-// 配置读取: GET /dsh-chatvoice/config (host 路由, 持久化 ~/.dsh/chatvoice.json)
-// 配置保存: POST /dsh-chatvoice/config —— 保存即生效, 无需重启。
-window.__ModuleLoader__.load({ id: "dsh-chatvoice", factory: (require) => {
+// 配置读取: GET /dsh-talk-to-text/config (host 路由, 持久化 ~/.dsh/talk-to-text.json)
+// 配置保存: POST /dsh-talk-to-text/config —— 保存即生效, 无需重启。
+window.__ModuleLoader__.load({ id: "dsh-talk-to-text", factory: (require) => {
   var module = { exports: {} };
   var exports = module.exports;
   Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
   const react = require("react");
 
   const NS = "chatvoice";
-  const CONFIG_URL = "/dsh-chatvoice/config";
-  const REALTIME_SESSION_URL = "/dsh-chatvoice/realtime/session";
-  const DOUBAO_REALTIME_URL = "/dsh-chatvoice/realtime/doubao";
-  const DRAFT_FINALIZE_URL = "/dsh-chatvoice/draft/finalize";
+  const CONFIG_URL = "/dsh-talk-to-text/config";
+  const REALTIME_SESSION_URL = "/dsh-talk-to-text/realtime/session";
+  const DOUBAO_REALTIME_URL = "/dsh-talk-to-text/realtime/doubao";
+  const DRAFT_FINALIZE_URL = "/dsh-talk-to-text/draft/finalize";
 
   /* ══════════════════════════ 共享状态 ══════════════════════════ */
 
@@ -206,7 +206,7 @@ window.__ModuleLoader__.load({ id: "dsh-chatvoice", factory: (require) => {
     root.className = "chatvoice-workspace";
     root.dataset.chatvoiceWorkspace = "1";
     root.innerHTML = [
-      '<div class="chatvoice-workspace-head"><span class="chatvoice-workspace-title">ChatVoice · 双工讨论</span><span class="chatvoice-workspace-status">连接中…</span></div>',
+      '<div class="chatvoice-workspace-head"><span class="chatvoice-workspace-title">Talk to Text · 双工讨论</span><span class="chatvoice-workspace-status">连接中…</span></div>',
       '<div class="chatvoice-workspace-reply">直接说出还没想清楚的内容。模型会用语音和你讨论；只有明确的修改操作才会更新下方草稿。</div>',
       '<div class="chatvoice-workspace-note">语音回复不会写入草稿。草稿只由独立的修改工具更新，且只有“提交给 Agent”或主动按 Enter 才会发送。</div>',
       '<div class="chatvoice-workspace-actions"><button type="button" class="chatvoice-workspace-btn" data-chatvoice-workspace-action="finalize">整理成最终稿</button><button type="button" class="chatvoice-workspace-btn chatvoice-workspace-primary" data-chatvoice-workspace-action="submit">提交给 Agent</button><button type="button" class="chatvoice-workspace-btn" data-chatvoice-workspace-action="close">关闭</button></div>',
@@ -437,7 +437,7 @@ window.__ModuleLoader__.load({ id: "dsh-chatvoice", factory: (require) => {
   function voiceEditorInstructions(ta) {
     const context = transcriptionContext(ta);
     return [
-      "You are ChatVoice, a context-aware thinking and drafting partner between the user and a coding agent.",
+      "You are Talk to Text, a context-aware thinking and drafting partner between the user and a coding agent.",
       "The user may think aloud, ask a question, explore alternatives, dictate content, edit earlier text, or ask you to finalize it.",
       "Hold a natural full-duplex voice conversation. Reply in audio, keep replies concise, and allow the user to interrupt you.",
       "Keep spoken conversation and editable draft strictly separate. Spoken replies never enter the draft unless the user explicitly dictates them, requests an edit, or accepts them as part of the result.",
@@ -488,7 +488,7 @@ window.__ModuleLoader__.load({ id: "dsh-chatvoice", factory: (require) => {
   function setMicState(btn, state) {
     const on = state === "recording" || state === "starting";
     btn.classList.toggle("chatvoice-recording", on);
-    btn.title = on ? "共同思考中…再次点击停止" : "ChatVoice：点击开始讨论并维护草稿，再次点击停止";
+    btn.title = on ? "共同思考中…再次点击停止" : "Talk to Text：点击开始讨论并维护草稿，再次点击停止";
     btn.setAttribute("aria-label", btn.title);
   }
 
@@ -857,7 +857,7 @@ window.__ModuleLoader__.load({ id: "dsh-chatvoice", factory: (require) => {
       await pc.setLocalDescription(offer);
       const response = await fetch(REALTIME_SESSION_URL, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-DSH-ChatVoice": "1" },
+        headers: { "Content-Type": "application/json", "X-DSH-Talk-To-Text": "1" },
         body: JSON.stringify({ sdp: offer.sdp, context: transcriptionContext(ta) }),
         signal: controller.abort.signal,
       });
@@ -940,7 +940,7 @@ window.__ModuleLoader__.load({ id: "dsh-chatvoice", factory: (require) => {
         const discussion = dialogTurns.slice(-20).map((turn) => turn.role + ": " + turn.text).join("\n");
         fetch(DRAFT_FINALIZE_URL, {
           method: "POST",
-          headers: { "Content-Type": "application/json", "X-DSH-ChatVoice": "1" },
+          headers: { "Content-Type": "application/json", "X-DSH-Talk-To-Text": "1" },
           body: JSON.stringify({
             draft: baseline,
             context: transcriptionContext(ta) + (discussion ? "\n\nVoice discussion:\n" + discussion : ""),
@@ -1220,7 +1220,7 @@ window.__ModuleLoader__.load({ id: "dsh-chatvoice", factory: (require) => {
       btn.disabled = !secure || !support.ok;
       btn.title = !secure
         ? "非安全上下文无法使用麦克风（请用 http://127.0.0.1:3080 访问）"
-        : (support.ok ? "ChatVoice：点击开始讨论并维护草稿，再次点击停止" : support.reason);
+        : (support.ok ? "Talk to Text：点击开始讨论并维护草稿，再次点击停止" : support.reason);
       btn.setAttribute("aria-label", btn.title);
     });
   }
@@ -1234,7 +1234,7 @@ window.__ModuleLoader__.load({ id: "dsh-chatvoice", factory: (require) => {
     const support = recognitionSupport();
     if (!support.ok) { btn.disabled = true; btn.title = support.reason; }
     else if (!window.isSecureContext) { btn.disabled = true; btn.title = "非安全上下文无法使用麦克风（请用 http://127.0.0.1:3080 访问）"; }
-    else btn.title = "ChatVoice：点击开始讨论并维护草稿，再次点击停止";
+    else btn.title = "Talk to Text：点击开始讨论并维护草稿，再次点击停止";
     btn.setAttribute("aria-label", btn.title);
     btn.addEventListener("click", (ev) => { ev.preventDefault(); ev.stopPropagation(); toggleMic(ta, btn); });
     return btn;
@@ -1398,7 +1398,7 @@ window.__ModuleLoader__.load({ id: "dsh-chatvoice", factory: (require) => {
             cfg.realtimeModels = (body.capabilities && Array.isArray(body.capabilities.realtimeModels)) ? body.capabilities.realtimeModels : [];
             setState((s) => ({ ...s, saving: false, saved: true, value: { ...cfg } }));
             refreshMicButtonSupport();
-            toast("ChatVoice 设置已保存，立即生效");
+            toast("Talk to Text 设置已保存，立即生效");
           } else {
             setState((s) => ({ ...s, saving: false, error: (body && body.error) || "保存失败" }));
           }
@@ -1427,7 +1427,7 @@ window.__ModuleLoader__.load({ id: "dsh-chatvoice", factory: (require) => {
           : (srSupported() ? "● 浏览器原生语音识别可用" : "○ 当前浏览器不支持原生语音识别（推荐 Edge 或 Chrome）")));
 
     return react.createElement("div", { style: { padding: "14px 0", maxWidth: 560 } }, [
-      react.createElement("div", { key: "t", style: { fontSize: 16, fontWeight: 600, marginBottom: 4 } }, "ChatVoice 语音设置"),
+      react.createElement("div", { key: "t", style: { fontSize: 16, fontWeight: 600, marginBottom: 4 } }, "Talk to Text 语音设置"),
       react.createElement("div", { key: "d", style: { fontSize: 12, opacity: 0.6, marginBottom: 10 } }, "通过自然语音与上下文感知模型共同思考，持续维护可编辑草稿，定稿后再提交给主 Agent"),
       react.createElement("div", { key: "s", className: "chatvoice-status" }, status),
       react.createElement("div", { key: "provider", className: "chatvoice-field" }, [
@@ -1564,9 +1564,9 @@ window.__ModuleLoader__.load({ id: "dsh-chatvoice", factory: (require) => {
     // 设置页分组（沿用 free-vision 已验证的 slots 注册写法）
     ctx.slots.inject("settings.section", () => ctx.slots.register({
       name: "settings.section",
-      id: "dsh-chatvoice",
+      id: "dsh-talk-to-text",
       order: 60,
-      label: () => "ChatVoice",
+      label: () => "Talk to Text",
       locale: NS,
       inject: () => ({})
     }, () => react.createElement(Section)));
@@ -1575,7 +1575,7 @@ window.__ModuleLoader__.load({ id: "dsh-chatvoice", factory: (require) => {
     else boot();
   }
 
-  exports.name = "dsh-chatvoice";
+  exports.name = "dsh-talk-to-text";
   exports.inject = ["slots", "sessions"];
   exports.apply = apply;
   return module.exports;
