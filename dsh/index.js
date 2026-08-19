@@ -152,7 +152,10 @@ function registeredRealtimeModels(descriptors = []) {
     const protocol = String(profile.protocol || model.runtimeAdapter || '')
     const isDoubao = protocol === 'doubao-realtime-duplex'
     const configuredModels = Array.isArray(connection.models) ? connection.models.map(object) : []
-    const selectedByProvider = isDoubao && configuredModels.some(candidate => String(candidate.id || '') === String(model.model || ''))
+    const selectedByProvider = isDoubao && configuredModels.some(candidate => {
+      const candidateID = String(candidate.id || '')
+      return candidateID === String(profile.voice || '') || candidateID === id
+    })
     if (model.enabled === false && !selectedByProvider) continue
     if (model.task !== 'realtime-speech' && !capabilities.includes('speech.realtime_session')) continue
     if (provider !== 'openai' && !isDoubao) continue
@@ -167,6 +170,8 @@ function registeredRealtimeModels(descriptors = []) {
       credentialRefs,
       protocol: isDoubao ? 'doubao-realtime-duplex' : 'openai-webrtc',
       endpoint: String(profile.endpoint || (isDoubao ? DOUBAO_DUPLEX_ENDPOINT : '')),
+      voice: String(profile.voice || ''),
+      variant: String(profile.variant || ''),
     })
   }
 
@@ -523,6 +528,7 @@ export function apply(ctx, config = {}) {
             const result = await probeDoubaoDuplex({
               endpoint: selected.endpoint,
               model: selected.model,
+              voice: selected.voice,
               apiKey: credential.apiKey,
             })
             sendJson(res, 200, { ok: true, observedAt: new Date().toISOString(), ...result })

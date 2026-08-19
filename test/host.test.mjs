@@ -116,10 +116,12 @@ test('discovers a registered Doubao Duplex route with server-owned credential re
             apiKey: 'DOUBAO_API_KEY',
             realtimeApiKey: 'DOUBAO_API_KEY',
           },
+          models: [{ id: 'saturn_zh_male_fuheigongzi_tob' }],
         },
       },
       models: {
-        'doubao/realtime-duplex-3.0': {
+        'doubao/realtime/saturn_zh_male_fuheigongzi_tob': {
+          enabled: false,
           connection: 'doubao-speech',
           model: '1.2.6.1',
           task: 'realtime-speech',
@@ -128,6 +130,8 @@ test('discovers a registered Doubao Duplex route with server-owned credential re
           profile: {
             protocol: 'doubao-realtime-duplex',
             endpoint: 'wss://openspeech.bytedance.com/api/v3/duplex/realtime/dialogue',
+            voice: 'saturn_zh_male_fuheigongzi_tob',
+            variant: 'sc-2.0',
           },
         },
       },
@@ -138,6 +142,7 @@ test('discovers a registered Doubao Duplex route with server-owned credential re
   assert.equal(found[0].protocol, 'doubao-realtime-duplex')
   assert.equal(found[0].credentialRef, 'DOUBAO_API_KEY')
   assert.equal(found[0].credentialRefs.realtimeApiKey, 'DOUBAO_API_KEY')
+  assert.equal(found[0].voice, 'saturn_zh_male_fuheigongzi_tob')
 })
 
 test('builds a Doubao Duplex session with PCM audio and the isolated draft tool', () => {
@@ -147,9 +152,21 @@ test('builds a Doubao Duplex session with PCM audio and the isolated draft tool'
   assert.equal(built.session.model, '1.2.6.1')
   assert.equal(built.session.audio.input.format.rate, 16000)
   assert.equal(built.session.audio.output.format.rate, 24000)
+  assert.equal(built.session.audio.output.voice, 'zh_female_vv_jupiter_bigtts')
   assert.equal(built.session.tools[0].name, 'update_working_draft')
   assert.equal(built.session.tools[0].strict, true)
   assert.match(built.session.instructions, /Current draft/)
+})
+
+test('maps a selected Doubao Realtime profile to its fixed protocol model and voice', () => {
+  const built = buildDoubaoDuplexSession(
+    '1.2.6.1',
+    'Discuss the draft.',
+    'session-sc',
+    'saturn_zh_male_fuheigongzi_tob',
+  )
+  assert.equal(built.session.model, '1.2.6.1')
+  assert.equal(built.session.audio.output.voice, 'saturn_zh_male_fuheigongzi_tob')
 })
 
 test('Doubao bridge requires a same-origin browser upgrade', () => {

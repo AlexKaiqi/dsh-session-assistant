@@ -73,7 +73,12 @@ export function doubaoDraftTool() {
   }
 }
 
-export function buildDoubaoDuplexSession(model, instructions, id = randomUUID()) {
+export function buildDoubaoDuplexSession(
+  model,
+  instructions,
+  id = randomUUID(),
+  voice = 'zh_female_vv_jupiter_bigtts',
+) {
   return {
     session: {
       type: 'realtime',
@@ -84,7 +89,7 @@ export function buildDoubaoDuplexSession(model, instructions, id = randomUUID())
         input: { format: { type: 'pcm', rate: DOUBAO_INPUT_SAMPLE_RATE } },
         output: {
           format: { type: 'pcm_s16le', rate: DOUBAO_OUTPUT_SAMPLE_RATE },
-          voice: 'zh_female_vv_jupiter_bigtts',
+          voice: String(voice || 'zh_female_vv_jupiter_bigtts'),
         },
       },
       tools: [doubaoDraftTool()],
@@ -140,7 +145,12 @@ function safeUpstreamEvent(message, sessionState) {
       return functionResultEvent(message)
     case 'context.update': {
       const context = boundedContext(message.context)
-      const next = buildDoubaoDuplexSession(sessionState.model, sessionState.instructions(context), sessionState.id)
+      const next = buildDoubaoDuplexSession(
+        sessionState.model,
+        sessionState.instructions(context),
+        sessionState.id,
+        sessionState.voice,
+      )
       return { type: 'session.update', event_id: randomUUID(), ...next }
     }
     case 'session.close':
@@ -151,7 +161,7 @@ function safeUpstreamEvent(message, sessionState) {
 }
 
 /** Open and initialize one short-lived upstream session to verify credentials and model access. */
-export function probeDoubaoDuplex({ endpoint, apiKey, model }, timeoutMs = 20_000) {
+export function probeDoubaoDuplex({ endpoint, apiKey, model, voice }, timeoutMs = 20_000) {
   return new Promise((resolve, reject) => {
     const started = performance.now()
     const upstream = new WebSocket(String(endpoint || DOUBAO_DUPLEX_ENDPOINT), {
@@ -171,7 +181,12 @@ export function probeDoubaoDuplex({ endpoint, apiKey, model }, timeoutMs = 20_00
     }
     const timer = setTimeout(() => finish(new Error('豆包 Realtime 连接测试超时')), timeoutMs)
     upstream.on('open', () => {
-      const session = buildDoubaoDuplexSession(model, 'Connection test. Do not produce a response.')
+      const session = buildDoubaoDuplexSession(
+        model,
+        'Connection test. Do not produce a response.',
+        randomUUID(),
+        voice,
+      )
       upstream.send(JSON.stringify({ type: 'session.create', event_id: randomUUID(), ...session }))
     })
     upstream.on('message', (payload, binary) => {
@@ -243,6 +258,7 @@ export function registerDoubaoDuplexUpgrade(scope, options) {
               sessionState = {
                 id: randomUUID(),
                 model: route.model || DOUBAO_DUPLEX_MODEL,
+                voice: route.voice,
                 instructions: options.instructions,
               }
               const endpoint = String(route.endpoint || DOUBAO_DUPLEX_ENDPOINT)
@@ -257,6 +273,7 @@ export function registerDoubaoDuplexUpgrade(scope, options) {
                   sessionState.model,
                   sessionState.instructions(context),
                   sessionState.id,
+                  sessionState.voice,
                 )
                 upstream.send(JSON.stringify({ type: 'session.create', event_id: randomUUID(), ...config }))
               })
