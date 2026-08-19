@@ -32,7 +32,7 @@ window.__ModuleLoader__.load({ id: "dsh-talk-to-text", factory: (require) => {
     doubaoRealtimeModel: "",
     doubaoRealtimeAvailable: false,
     doubaoRealtimeMissing: [],
-    doubaoCredentialRefs: { appId: "DOUBAO_APPID", apiKey: "DOUBAO_REALTIME_API_KEY" },
+    doubaoCredentialRefs: { apiKey: "DOUBAO_API_KEY" },
     realtimeModels: [],
     autoSpeak: false,
     autoSpeakMode: "final",
@@ -1422,7 +1422,7 @@ window.__ModuleLoader__.load({ id: "dsh-talk-to-text", factory: (require) => {
           ? (state.value.doubaoRealtimeAvailable
             ? (doubaoRealtimeSupported() ? "● 豆包 Realtime Duplex 共同思考工作台可用" : "○ 当前浏览器不支持 WebSocket 实时音频")
             : (doubaoModels.length
-              ? "○ 豆包 Realtime 尚缺凭据：" + ((cfg.doubaoRealtimeMissing || []).join("、") || "请检查 App ID / API Key")
+              ? "○ 豆包 Realtime 尚缺凭据：" + ((cfg.doubaoRealtimeMissing || []).join("、") || "请检查 API Key")
               : "○ 模型注册表中没有豆包 Realtime Duplex 模型"))
           : (srSupported() ? "● 浏览器原生语音识别可用" : "○ 当前浏览器不支持原生语音识别（推荐 Edge 或 Chrome）")));
 

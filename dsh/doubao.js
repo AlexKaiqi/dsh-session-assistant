@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import WebSocket, { WebSocketServer } from 'ws'
 
 export const DOUBAO_DUPLEX_ENDPOINT = 'wss://openspeech.bytedance.com/api/v3/duplex/realtime/dialogue'
-export const DOUBAO_DUPLEX_MODEL = '1.2.6.0'
+export const DOUBAO_DUPLEX_MODEL = '1.2.6.1'
 export const DOUBAO_INPUT_SAMPLE_RATE = 16_000
 export const DOUBAO_OUTPUT_SAMPLE_RATE = 24_000
 
@@ -76,6 +76,7 @@ export function doubaoDraftTool() {
 export function buildDoubaoDuplexSession(model, instructions, id = randomUUID()) {
   return {
     session: {
+      type: 'realtime',
       id,
       model: String(model || DOUBAO_DUPLEX_MODEL),
       instructions: String(instructions || ''),
@@ -150,12 +151,11 @@ function safeUpstreamEvent(message, sessionState) {
 }
 
 /** Open and initialize one short-lived upstream session to verify credentials and model access. */
-export function probeDoubaoDuplex({ endpoint, appId, apiKey, model }, timeoutMs = 20_000) {
+export function probeDoubaoDuplex({ endpoint, apiKey, model }, timeoutMs = 20_000) {
   return new Promise((resolve, reject) => {
     const started = performance.now()
     const upstream = new WebSocket(String(endpoint || DOUBAO_DUPLEX_ENDPOINT), {
       headers: {
-        'X-Api-App-Id': String(appId || ''),
         'X-Api-Key': String(apiKey || ''),
       },
       handshakeTimeout: timeoutMs,
@@ -238,8 +238,7 @@ export function registerDoubaoDuplexUpgrade(scope, options) {
               const route = await options.selectRoute()
               if (!route) throw new Error('模型注册表中没有豆包 Realtime Duplex 路由')
               const credential = await options.resolveCredentials(route)
-              if (!credential?.appId) throw new Error(`DSH host 未配置 ${credential?.appIdRef || 'DOUBAO_APPID'}`)
-              if (!credential?.apiKey) throw new Error(`DSH host 未配置 ${credential?.apiKeyRef || 'DOUBAO_REALTIME_API_KEY'}`)
+              if (!credential?.apiKey) throw new Error(`DSH host 未配置 ${credential?.apiKeyRef || 'DOUBAO_API_KEY'}`)
               const context = boundedContext(message.context)
               sessionState = {
                 id: randomUUID(),
@@ -249,7 +248,6 @@ export function registerDoubaoDuplexUpgrade(scope, options) {
               const endpoint = String(route.endpoint || DOUBAO_DUPLEX_ENDPOINT)
               upstream = new WebSocket(endpoint, {
                 headers: {
-                  'X-Api-App-Id': credential.appId,
                   'X-Api-Key': credential.apiKey,
                 },
                 handshakeTimeout: 20_000,

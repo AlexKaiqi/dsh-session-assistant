@@ -73,14 +73,13 @@ dsh plugin --profile web add dsh-talk-to-text
 
 ### 使用豆包 Realtime Duplex（默认）
 
-模型注册插件内置 `doubao/realtime-duplex-3.0`（模型 `1.2.6.0`）。在“设置 → 模型 → 豆包语音”中启用它并配置：
+模型注册插件内置 `doubao/realtime-duplex-3.0`（模型 `1.2.6.1`）。在“设置 → 模型 → 豆包语音”中启用它，只需配置：
 
-- `DOUBAO_APPID`
-- `DOUBAO_REALTIME_API_KEY`
+- `DOUBAO_API_KEY`
 
 保存 Provider 时会自动建立一次短连接，只有鉴权和 Realtime 会话初始化成功才显示测试通过。Talk to Text 本身不再保存这些凭据。
 
-豆包使用 `wss://openspeech.bytedance.com/api/v3/duplex/realtime/dialogue` 的 JSON WebSocket 协议。浏览器只连接同源 DSH host；App ID/API Key、上游地址、system instructions 和工具定义都由 host 控制，不会下发长期密钥。音频以 16 kHz PCM 上行、24 kHz PCM 下行，支持插话取消。
+豆包使用 `wss://openspeech.bytedance.com/api/v3/duplex/realtime/dialogue` 的 JSON WebSocket 协议和新版控制台单 `X-Api-Key` 鉴权。浏览器只连接同源 DSH host；API Key、上游地址、system instructions 和工具定义都由 host 控制，不会下发长期密钥。音频以 16 kHz PCM 上行、24 kHz PCM 下行，支持插话取消。
 
 Duplex 原生函数调用提供 `update_working_draft` 侧通道。用户转写、模型回复和应用上下文留在同一语音会话；纯讨论只输出语音/文本，明确口述、编辑、接受结论或定稿时才提交完整新草稿。点击“整理成最终稿”则自动选择注册表中的非 Realtime 文本模型完成一次独立收束，避免依赖语音协议的文本触发限制。
 
@@ -125,7 +124,7 @@ Realtime 的音频输出是讨论主通道；`update_working_draft` 函数调用
 - Firefox / Safari 不支持 SpeechRecognition（按钮自动置灰提示，朗读仍可用）
 - 语音识别准确性取决于浏览器与系统麦克风，与插件无关
 - OpenAI Realtime 会产生 API 用量与费用，并要求 host 能访问 OpenAI API
-- 豆包 Duplex 3.0 需要单独开通实时语音资源，并配置 `DOUBAO_APPID` + API Key；仅注册模型不代表账号已开通
+- 豆包 Duplex 3.0 需要在新版语音控制台开通实时语音资源，并配置 `DOUBAO_API_KEY`；仅注册模型不代表账号已开通
 
 ## Roadmap（Phase 2）
 

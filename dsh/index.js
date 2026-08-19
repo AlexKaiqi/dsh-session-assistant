@@ -146,13 +146,15 @@ function registeredRealtimeModels(descriptors = []) {
     const model = object(raw)
     const connection = object(connections[model.connection])
     const capabilities = Array.isArray(model.capabilities) ? model.capabilities : []
-    if (model.enabled === false) continue
-    if (model.task !== 'realtime-speech' && !capabilities.includes('speech.realtime_session')) continue
     const provider = String(connection.provider || '')
     const profile = object(model.profile)
     const credentialRefs = object(connection.credentialRefs)
     const protocol = String(profile.protocol || model.runtimeAdapter || '')
     const isDoubao = protocol === 'doubao-realtime-duplex'
+    const configuredModels = Array.isArray(connection.models) ? connection.models.map(object) : []
+    const selectedByProvider = isDoubao && configuredModels.some(candidate => String(candidate.id || '') === String(model.model || ''))
+    if (model.enabled === false && !selectedByProvider) continue
+    if (model.task !== 'realtime-speech' && !capabilities.includes('speech.realtime_session')) continue
     if (provider !== 'openai' && !isDoubao) continue
     add({
       id,
@@ -346,21 +348,19 @@ async function resolvedCredential(scope, ref) {
 
 async function resolveDoubaoCredentials(scope, route = {}) {
   const refs = object(route.credentialRefs)
-  const appIdRef = String(refs.speechAppId || 'DOUBAO_APPID')
   const candidates = [...new Set([
+    route.credentialRef,
+    refs.apiKey,
     refs.realtimeApiKey,
-    refs.speechApiKey,
-    refs.speechToken,
-    'DOUBAO_REALTIME_API_KEY',
     'DOUBAO_API_KEY',
-    'DOUBAO_TOKEN',
+    // Read the former dedicated key reference as a migration fallback only.
+    'DOUBAO_REALTIME_API_KEY',
   ].filter(Boolean).map(String))]
-  const appId = await resolvedCredential(scope, appIdRef)
   for (const apiKeyRef of candidates) {
     const apiKey = await resolvedCredential(scope, apiKeyRef)
-    if (apiKey) return { appId, apiKey, appIdRef, apiKeyRef }
+    if (apiKey) return { apiKey, apiKeyRef }
   }
-  return { appId, apiKey: '', appIdRef, apiKeyRef: String(refs.realtimeApiKey || 'DOUBAO_REALTIME_API_KEY') }
+  return { apiKey: '', apiKeyRef: String(route.credentialRef || refs.apiKey || refs.realtimeApiKey || 'DOUBAO_API_KEY') }
 }
 
 async function selectDraftFinalizeModel(scope) {
@@ -443,8 +443,7 @@ export function apply(ctx, config = {}) {
           ? await resolveDoubaoCredentials(scope, selectedDoubao)
           : undefined
         const doubaoMissing = []
-        if (selectedDoubao && !doubaoCredential?.appId) doubaoMissing.push(doubaoCredential?.appIdRef || 'DOUBAO_APPID')
-        if (selectedDoubao && !doubaoCredential?.apiKey) doubaoMissing.push(doubaoCredential?.apiKeyRef || 'DOUBAO_REALTIME_API_KEY')
+        if (selectedDoubao && !doubaoCredential?.apiKey) doubaoMissing.push(doubaoCredential?.apiKeyRef || 'DOUBAO_API_KEY')
         return {
           value: {
             ...getEffective(),
@@ -453,11 +452,10 @@ export function apply(ctx, config = {}) {
           },
           capabilities: {
             openaiRealtime: Boolean(selectedOpenAI && openaiCredentialReady),
-            doubaoRealtime: Boolean(selectedDoubao && doubaoCredential?.appId && doubaoCredential?.apiKey),
+            doubaoRealtime: Boolean(selectedDoubao && doubaoCredential?.apiKey),
             doubaoRealtimeMissing: doubaoMissing,
             doubaoCredentialRefs: {
-              appId: doubaoCredential?.appIdRef || 'DOUBAO_APPID',
-              apiKey: doubaoCredential?.apiKeyRef || 'DOUBAO_REALTIME_API_KEY',
+              apiKey: doubaoCredential?.apiKeyRef || 'DOUBAO_API_KEY',
             },
             realtimeModels: models.map(({ id, model, displayName, provider, source, protocol }) => ({
               id, model, displayName, provider, source, protocol,
@@ -521,12 +519,10 @@ export function apply(ctx, config = {}) {
             const selected = selectRealtimeModel(getEffective(), models, 'doubao')
             if (!selected) throw new Error('模型注册表中没有已启用的豆包 Realtime Duplex 路由')
             const credential = await resolveDoubaoCredentials(scope, selected)
-            if (!credential?.appId) throw new Error(`未配置 ${credential?.appIdRef || 'DOUBAO_APPID'}`)
-            if (!credential?.apiKey) throw new Error(`未配置 ${credential?.apiKeyRef || 'DOUBAO_REALTIME_API_KEY'}`)
+            if (!credential?.apiKey) throw new Error(`未配置 ${credential?.apiKeyRef || 'DOUBAO_API_KEY'}`)
             const result = await probeDoubaoDuplex({
               endpoint: selected.endpoint,
               model: selected.model,
-              appId: credential.appId,
               apiKey: credential.apiKey,
             })
             sendJson(res, 200, { ok: true, observedAt: new Date().toISOString(), ...result })

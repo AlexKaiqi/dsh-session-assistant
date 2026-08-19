@@ -72,14 +72,13 @@ Reply read-aloud and automatic read-aloud remain available on assistant messages
 
 ### Doubao Realtime Duplex (default)
 
-The model registry includes `doubao/realtime-duplex-3.0` (model `1.2.6.0`). Enable it under **Settings → Models → Doubao Speech** and configure:
+The model registry includes `doubao/realtime-duplex-3.0` (model `1.2.6.1`). Enable it under **Settings → Models → Doubao Speech** and configure only:
 
-- `DOUBAO_APPID`
-- `DOUBAO_REALTIME_API_KEY`
+- `DOUBAO_API_KEY`
 
 Saving the provider automatically opens a short connection and reports success only after authentication and Realtime session initialization. Talk to Text no longer stores these provider credentials.
 
-The host proxies the JSON WebSocket protocol at `wss://openspeech.bytedance.com/api/v3/duplex/realtime/dialogue`. Credentials, endpoint, instructions, and tool definitions stay server-owned. The browser streams 16 kHz PCM and plays queued 24 kHz PCM with immediate interruption. Native function calling supplies the same isolated `update_working_draft` side channel used by OpenAI.
+The host proxies the JSON WebSocket protocol at `wss://openspeech.bytedance.com/api/v3/duplex/realtime/dialogue` using the new console's single `X-Api-Key` authentication. Credentials, endpoint, instructions, and tool definitions stay server-owned. The browser streams 16 kHz PCM and plays queued 24 kHz PCM with immediate interruption. Native function calling supplies the same isolated `update_working_draft` side channel used by OpenAI.
 
 ### OpenAI Realtime input
 
@@ -122,7 +121,7 @@ Realtime audio output is the discussion channel; the `update_working_draft` func
 - Firefox / Safari don't support SpeechRecognition (the mic button is disabled with a hint; read-aloud still works)
 - Recognition accuracy depends on the browser and your microphone, not the plugin
 - OpenAI Realtime incurs API usage and requires the host to reach the OpenAI API
-- Doubao Duplex 3.0 must be enabled for the account and needs `DOUBAO_APPID` plus an API key; registry presence alone does not prove entitlement
+- Doubao Duplex 3.0 must be enabled in the new Speech console and needs `DOUBAO_API_KEY`; registry presence alone does not prove entitlement
 
 ## Roadmap (Phase 2)
 

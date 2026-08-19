@@ -111,16 +111,17 @@ test('discovers a registered Doubao Duplex route with server-owned credential re
       connections: {
         'doubao-speech': {
           provider: 'doubao-speech',
+          credentialRef: 'DOUBAO_API_KEY',
           credentialRefs: {
-            speechAppId: 'DOUBAO_APPID',
-            realtimeApiKey: 'DOUBAO_REALTIME_API_KEY',
+            apiKey: 'DOUBAO_API_KEY',
+            realtimeApiKey: 'DOUBAO_API_KEY',
           },
         },
       },
       models: {
         'doubao/realtime-duplex-3.0': {
           connection: 'doubao-speech',
-          model: '1.2.6.0',
+          model: '1.2.6.1',
           task: 'realtime-speech',
           runtimeAdapter: 'doubao-realtime-duplex',
           capabilities: ['speech.realtime_session'],
@@ -135,13 +136,15 @@ test('discovers a registered Doubao Duplex route with server-owned credential re
   assert.equal(found.length, 1)
   assert.equal(found[0].provider, 'doubao-speech')
   assert.equal(found[0].protocol, 'doubao-realtime-duplex')
-  assert.equal(found[0].credentialRefs.realtimeApiKey, 'DOUBAO_REALTIME_API_KEY')
+  assert.equal(found[0].credentialRef, 'DOUBAO_API_KEY')
+  assert.equal(found[0].credentialRefs.realtimeApiKey, 'DOUBAO_API_KEY')
 })
 
 test('builds a Doubao Duplex session with PCM audio and the isolated draft tool', () => {
-  const built = buildDoubaoDuplexSession('1.2.6.0', 'Current draft: hello', 'session-test')
+  const built = buildDoubaoDuplexSession('1.2.6.1', 'Current draft: hello', 'session-test')
   assert.equal(built.session.id, 'session-test')
-  assert.equal(built.session.model, '1.2.6.0')
+  assert.equal(built.session.type, 'realtime')
+  assert.equal(built.session.model, '1.2.6.1')
   assert.equal(built.session.audio.input.format.rate, 16000)
   assert.equal(built.session.audio.output.format.rate, 24000)
   assert.equal(built.session.tools[0].name, 'update_working_draft')
@@ -156,7 +159,7 @@ test('Doubao bridge requires a same-origin browser upgrade', () => {
 })
 
 test('Doubao bridge only emits bounded audio and structured tool results', () => {
-  const state = { id: 'session-test', model: '1.2.6.0', instructions: (context) => context }
+  const state = { id: 'session-test', model: '1.2.6.1', instructions: (context) => context }
   const audio = safeUpstreamEvent({ type: 'input_audio_buffer.append', audio: 'AQID' }, state)
   assert.equal(audio.type, 'input_audio_buffer.append')
   assert.equal(audio.audio, 'AQID')
@@ -372,12 +375,13 @@ test('the Models provider owns Doubao credentials and the probe requires an expl
       connections: {
         'doubao-speech': {
           provider: 'doubao-speech',
-          credentialRefs: { speechAppId: 'DOUBAO_APPID', realtimeApiKey: 'DOUBAO_REALTIME_API_KEY' },
+          credentialRef: 'DOUBAO_API_KEY',
+          credentialRefs: { apiKey: 'DOUBAO_API_KEY', realtimeApiKey: 'DOUBAO_API_KEY' },
         },
       },
       models: {
         'doubao/realtime-duplex-3.0': {
-          connection: 'doubao-speech', model: '1.2.6.0', task: 'realtime-speech',
+          connection: 'doubao-speech', model: '1.2.6.1', task: 'realtime-speech',
           runtimeAdapter: 'doubao-realtime-duplex', capabilities: ['speech.realtime_session'],
           profile: { protocol: 'doubao-realtime-duplex' },
         },
