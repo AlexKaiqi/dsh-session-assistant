@@ -1,7 +1,7 @@
 {
   "name": "dsh-chatvoice",
-  "version": "0.1.7",
-  "description": "ChatVoice — free voice input + AI reply read-aloud for DeepSeek Harness (dsh). Zero config, zero cost, no API key, built on the browser's native Web Speech API. 给 DSH 装上「免费、免 API key、开箱即用」的语音输入 + 回复朗读闭环（中文优先）。",
+  "version": "0.3.0",
+  "description": "ChatVoice — full-duplex contextual voice deliberation with tool-controlled editable drafting for DeepSeek Harness.",
   "type": "module",
   "main": "./dsh/index.js",
   "exports": {
@@ -30,6 +30,9 @@
     "speech-recognition",
     "speech-synthesis",
     "voice-input",
+    "voice-workspace",
+    "deliberation",
+    "drafting",
     "read-aloud",
     "free",
     "zh-CN"
@@ -39,9 +42,23 @@
     "node": ">=18"
   },
   "dependencies": {
-    "@deepseek-ai/schemastery": "^3.18.1"
+    "@deepseek-ai/schemastery": "^3.18.1",
+    "ws": "^8.21.0"
   },
   "dsh": {
+    "inventory": {
+      "summary": {
+        "zh": "与上下文感知模型双工语音讨论，通过独立修改操作维护可编辑草稿，定稿后再提交给主 Agent。",
+        "en": "Hold a full-duplex contextual voice discussion, maintain an editable draft through separate mutations, and submit only after finalization."
+      },
+      "tags": ["voice", "realtime", "drafting", "productivity"],
+      "dependencies": [
+        "dsh-multi-model-provider",
+        "@deepseek-ai/dsh-llm",
+        "@deepseek-ai/dsh-settings",
+        "@deepseek-ai/dsh-credentials"
+      ]
+    },
     "bundle": {
       "patch": "./cordis.patch.yml"
     },
@@ -65,6 +82,7 @@
     "puppeteer-core": "^25.7.0"
   },
   "scripts": {
+    "test": "node --test test/*.test.mjs",
     "e2e": "node scripts/e2e.mjs",
     "gif": "node scripts/gif.mjs"
   }

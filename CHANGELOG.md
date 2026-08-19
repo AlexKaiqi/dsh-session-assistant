@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.3.0 (2026-08-19)
+
+- 新增豆包 Realtime Speech 3.0 / Seeduplex 后端：JSON WebSocket 全双工音频、插话取消、ASR/回复转写与原生函数调用
+- host 增加同源 WebSocket 安全代理，长期 App ID/API Key 不下发浏览器；仅允许白名单音频、上下文、取消和工具结果事件
+- 模型注册插件新增 `doubao/realtime-duplex-3.0`，自动选择并在设置页显示凭据缺口
+- 浏览器采集音频后下采样为 16 kHz PCM，上游 24 kHz PCM 通过 Web Audio 排队播放并支持立即打断
+- 豆包与 OpenAI 共用 `update_working_draft` 草稿侧通道，讨论回复仍不会直接写入草稿
+- “整理成最终稿”自动选择已注册的非 Realtime 文本模型，根据当前草稿、应用上下文和最近语音讨论生成最终文本
+
+## 0.2.0 (2026-08-19)
+
+- 将产品从“语音听写/改稿”升级为上下文感知的语音思考与定稿工作台
+- Realtime 改为真正的 WebRTC 双工语音对话，支持模型语音回复和 server VAD 插话打断
+- 语音讨论与草稿修改拆成两条通道：纯讨论只输出音频，只有 `update_working_draft` 工具调用才能修改草稿
+- 客户端执行草稿操作并回传 `function_call_output`，模型随后在同一会话中用语音确认
+- composer 新增共同思考面板，以及“整理成最终稿”和“提交给 Agent”的明确状态与提交边界
+- “整理成最终稿”在同一 Realtime 会话中追加文本轮次，保留本轮讨论与已经确认的约束
+
+## 0.1.8 (2026-08-19)
+
+- 新增 GPT Realtime 语音草稿编辑：支持追加口述内容和修改前文，每个语音轮次返回整份新草稿
+- 自动读取 `dsh-multi-model-provider` 和 `llm-pi-ai` 中的兼容 Realtime 路由；单模型自动选中，多模型可在设置页下拉选择
+- host 从注册路由解析 Base URL 和凭据引用，长期 Key 不下发浏览器；保留免费浏览器 SpeechRecognition 回退
+- Realtime 同步当前草稿、工作区名与最近可见对话；隐藏 Agent 状态不外发，host 强制 4,000 字符上限
+
 ## 0.1.7 (2026-08-16)
 
 - README 演示图拆为三个场景 GIF（中英双语各一套）：demo-input（语音输入）/ demo-speak（回复朗读）/ demo-edit（边听边改）

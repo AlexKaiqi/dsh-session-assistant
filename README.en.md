@@ -1,8 +1,8 @@
 # ChatVoice 🎤🔊 — dsh-chatvoice
 
 **English** | [中文](README.md)
-> **Free, zero-config, no-API-key voice for DeepSeek Harness (dsh): speak your prompts and have AI replies read aloud.**
-> Everything runs on the browser's native Web Speech API — no backend, no key, nothing to register.
+> **Use natural voice to think with a context-aware model, continuously maintain an editable draft, and submit a mature instruction or finished text to the main Agent.**
+> A registered Doubao Realtime Duplex 3.0 route is the default; OpenAI Realtime and free append-only browser Web Speech remain available.
 
 <p align="center">
   <img src="docs/demo-input.en.gif" alt="Voice input" width="600"/><br/>
@@ -16,29 +16,30 @@
 
 <p align="center">
   <img src="docs/demo-edit.en.gif" alt="Edit while listening" width="600"/><br/>
-  <sub>✏️ Edit while listening: type fixes or delete while the mic runs — append-only, never rewrites</sub>
+  <sub>✏️ Edit while listening: Doubao/OpenAI Realtime revise earlier text; browser fallback remains append-only</sub>
 </p>
 
 <p align="center">
   <img src="https://img.shields.io/badge/Zero--config-zero--config-blue" alt="Zero-config"/>
-  <img src="https://img.shields.io/badge/Free-free-brightgreen" alt="Free"/>
-  <img src="https://img.shields.io/badge/No_API_Key-no--key-orange" alt="No API Key"/>
+  <img src="https://img.shields.io/badge/GPT-Realtime-4c8bf5" alt="GPT Realtime"/>
+  <img src="https://img.shields.io/badge/Doubao-Realtime_Duplex-f05a28" alt="Doubao Realtime Duplex"/>
+  <img src="https://img.shields.io/badge/Browser_fallback-no_API_key-brightgreen" alt="Browser fallback needs no API key"/>
   <img src="https://img.shields.io/npm/v/dsh-chatvoice" alt="npm"/>
   <img src="https://img.shields.io/badge/license-MIT-lightgrey" alt="MIT"/>
 </p>
 
-**ChatVoice = Chat + Voice**: one plugin for both your mouth and your ears — dictate prompts while your hands stay on the keyboard, and let AI read long replies to you (listening-based learning, accessibility, or just lying back).
+**ChatVoice = Talk → Deliberate → Draft → Revise → Commit.** It is not merely speech-to-text: hold an interruptible full-duplex voice discussion with the Realtime model. Spoken replies never enter the draft; only a separate draft mutation can change the text, and submission to the main Agent remains explicit.
 
 ## Features
 
 | # | Feature | Details |
 |---|---|---|
-| 1 | 🎤 Voice input | Mic button in the composer toolbar: click once and **keep talking** — each confirmed sentence lands in the input box in real time (interim results show in the bubble above). **Type corrections or delete anything while listening** — speech only appends to the end of the box, never rewrites it, and deleted text stays deleted after you stop |
-| 2 | 🔊 Read aloud | Speaker button on every assistant reply; click again to stop anytime |
-| 3 | 🔁 Auto-read | When enabled, new replies are read aloud automatically (interruptible at any time) |
-| 4 | ⚙️ Settings | dsh Settings → ChatVoice: recognition language / auto-read / voice / rate — **saved instantly, no restart** |
-| 5 | 🛡 Friendly errors | Mic permission denied / browser unsupported / insecure context / network failure — every case shows a readable toast, never a silent failure |
-| 6 | 🇨🇳 Chinese-first | zh-CN recognition + auto-picks Edge's free natural Chinese voice `Xiaoxiao Online (Natural)` |
+| 1 | 💬 Full-duplex discussion | Doubao or GPT Realtime answers in audio and the user can interrupt at any time; pure discussion never touches the draft |
+| 2 | ✏️ Working draft | Only an `update_working_draft` operation replaces the complete draft; dictation, revision, deletion, reordering, and concurrent keyboard edits are supported |
+| 3 | ✅ Finalize and commit | “Finalize draft” uses an auto-discovered registered text model over the voice discussion and current draft; “Send to Agent” is the explicit submission boundary |
+| 4 | 🔊 Read aloud | Speaker button on every assistant reply; click again to stop anytime |
+| 5 | 🔁 Auto-read | When enabled, new replies are read aloud automatically (interruptible at any time) |
+| 6 | ⚙️ Model registry | Compatible Realtime routes are discovered automatically; one is auto-selected and multiple routes remain selectable, with credentials kept on the host |
 
 ## Why Edge is recommended
 
@@ -61,24 +62,58 @@ Restart dsh web (`dsh web`) and open `http://127.0.0.1:3080`.
 
 ## Usage
 
-1. **Voice input**: click 🎤 in the composer toolbar → allow the microphone permission → keep talking (each confirmed sentence lands in the box in real time, interim results show in the bubble) → click 🎤 again to stop → press Enter to send. While listening you can **type fixes or clear the box entirely** — speech only appends to the end and never rewrites, so nothing you deleted comes back
-2. **Read aloud**: click 🔊 next to an assistant reply → it reads aloud (button turns into a red ⏹) → click again to stop
-3. **Auto-read**: Settings → ChatVoice → enable "Auto-read new replies" → save; new replies are read automatically
+1. Click 🎤 and say the unfinished idea, question, choice, or edit you are considering.
+2. The model replies in audio and can be interrupted at any time. The workspace shows a transcript while the Agent composer holds the separate editable draft.
+3. Keep speaking or edit the draft with the keyboard. Concurrent keyboard edits win and are never overwritten.
+4. Click “Finalize draft” to distill the same Realtime discussion and current draft into a mature, self-contained result.
+5. Review it and click “Send to Agent”. Nothing crosses into the normal DSH Agent message flow before that action.
+
+Reply read-aloud and automatic read-aloud remain available on assistant messages and in Settings.
+
+### Doubao Realtime Duplex (default)
+
+The model registry includes `doubao/realtime-duplex-3.0` (model `1.2.6.0`). Enable it under **Settings → Models → Doubao Speech** and configure:
+
+- `DOUBAO_APPID`
+- `DOUBAO_REALTIME_API_KEY`
+
+Saving the provider automatically opens a short connection and reports success only after authentication and Realtime session initialization. ChatVoice no longer stores these provider credentials.
+
+The host proxies the JSON WebSocket protocol at `wss://openspeech.bytedance.com/api/v3/duplex/realtime/dialogue`. Credentials, endpoint, instructions, and tool definitions stay server-owned. The browser streams 16 kHz PCM and plays queued 24 kHz PCM with immediate interruption. Native function calling supplies the same isolated `update_working_draft` side channel used by OpenAI.
+
+### OpenAI Realtime input
+
+Start the DSH host with a standard API key. The key stays in the host process; it is never saved to `~/.dsh/chatvoice.json` or sent to the browser:
+
+```bash
+OPENAI_API_KEY=your_api_key dsh web
+```
+
+ChatVoice reads compatible GPT Realtime routes from `dsh-multi-model-provider` and `llm-pi-ai`. One route is selected automatically; registering more routes makes them appear in the model dropdown. The registered model, base URL, and credential reference remain authoritative.
+
+Realtime receives the current draft, workspace name, and six recent visible user/assistant messages as bounded application context. Hidden system prompts, tool arguments, and reasoning are excluded; the host caps the initial application context at 4,000 characters.
+
+Realtime audio output is the discussion channel; the `update_working_draft` function is the draft-mutation side channel. Pure discussion produces only a spoken reply. Dictation, an explicit edit, an accepted conclusion, or finalization produces the complete new draft, a short mutation summary, and a `drafting/ready` status. The client applies the operation, returns its function result to the same session, and Realtime acknowledges it by voice.
 
 ## Settings
 
 | Setting | Default | Description |
 |---|---|---|
+| Recognition provider | Doubao Realtime Duplex | Registered Doubao/OpenAI Realtime route, or free browser Web Speech fallback |
 | Recognition language | `zh-CN` | `zh-CN` / `en-US` |
+| Realtime model | First compatible registered route | Auto-discovered; multiple routes appear in a dropdown |
+| Deliberation context | Draft + recent visible conversation | Can be limited to draft-only or disabled |
 | Auto-read | off | Read new replies automatically when they complete (kept off by default — don't be too noisy) |
 | Voice | empty = auto | Auto-picks the best Chinese voice (Xiaoxiao Online (Natural)); or enter any voice name your browser provides |
 | Rate | `1.0` | `0.5` (slow) ~ `2` (fast) |
 
 ## How it works
 
-- **host** (`dsh/index.js`): Config schema + `GET/POST /dsh-chatvoice/config` route; settings persist to `~/.dsh/chatvoice.json`
-- **client** (`client/client.js`): MutationObserver injects the mic button (composer toolbar) and speaker buttons (assistant reply rows); `SpeechRecognition` for input; `speechSynthesis` for read-aloud
-- Everything comes from the browser: the plugin makes **no network requests, spawns no subprocesses, and needs no API key**
+- **host** (`dsh/index.js`, `dsh/doubao.js`): resolves registered models and credentials, initializes OpenAI WebRTC or a same-origin Doubao WebSocket proxy, and never exposes long-lived keys
+- **client** (`client/client.js`): uses WebRTC for OpenAI or Web Audio PCM streaming for Doubao, while both backends share the isolated draft-tool path
+- Realtime server VAD creates responses and supports interruption; `update_working_draft` is called only when the draft actually needs to change
+- The client applies the mutation, returns `function_call_output`, and asks the same session for a brief spoken acknowledgement; “Finalize draft” stays in that session
+- “Send to Agent” reuses DSH's native send action, so the main model receives its normal full Agent history plus the finalized draft
 
 ## Known limitations
 
@@ -86,6 +121,8 @@ Restart dsh web (`dsh web`) and open `http://127.0.0.1:3080`.
 - Edge's online voices need network access; offline it falls back to the system's local voices
 - Firefox / Safari don't support SpeechRecognition (the mic button is disabled with a hint; read-aloud still works)
 - Recognition accuracy depends on the browser and your microphone, not the plugin
+- OpenAI Realtime incurs API usage and requires the host to reach the OpenAI API
+- Doubao Duplex 3.0 must be enabled for the account and needs `DOUBAO_APPID` plus an API key; registry presence alone does not prove entitlement
 
 ## Roadmap (Phase 2)
 

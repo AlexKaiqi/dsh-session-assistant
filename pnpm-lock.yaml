@@ -11,6 +11,9 @@ importers:
       '@deepseek-ai/schemastery':
         specifier: ^3.18.1
         version: 3.18.1
+      ws:
+        specifier: ^8.21.0
+        version: 8.21.3
     devDependencies:
       puppeteer-core:
         specifier: ^25.7.0
