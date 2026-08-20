@@ -36,7 +36,7 @@
 |---|---|---|
 | 1 | 💬 Full-duplex discussion | Doubao or GPT Realtime answers in audio and the user can interrupt at any time; pure discussion never touches the draft |
 | 2 | ✏️ Working draft | Only an `update_working_draft` operation replaces the complete draft; dictation, revision, deletion, reordering, and concurrent keyboard edits are supported |
-| 3 | ✅ Finalize and commit | “Finalize draft” uses an auto-discovered registered text model over the voice discussion and current draft; “Send to Agent” is the explicit submission boundary |
+| 3 | ✅ Voice finalize and submit | Say “finalize” to polish the draft, or “submit / let the Agent execute it” to send the final text to the primary Agent without workspace buttons |
 | 4 | 🔊 Read aloud | Speaker button on every assistant reply; click again to stop anytime |
 | 5 | 🔁 Auto-read | When enabled, new replies are read aloud automatically (interruptible at any time) |
 | 6 | ⚙️ Model registry | Compatible Realtime routes are discovered automatically; one is auto-selected and multiple routes remain selectable, with credentials kept on the host |
@@ -65,7 +65,7 @@ Restart dsh web (`dsh web`) and open `http://127.0.0.1:3080`.
 1. Click 🎤 and say the unfinished idea, question, choice, or edit you are considering.
 2. The model replies in audio and can be interrupted at any time. The workspace shows a transcript while the Agent composer holds the separate editable draft.
 3. Keep speaking or edit the draft with the keyboard. Concurrent keyboard edits win and are never overwritten.
-4. Click “Finalize draft” to distill the same Realtime discussion and current draft into a mature, self-contained result.
+4. Say “finalize” to polish the draft, “submit / let the Agent execute it” to send it, or “end voice” to close without submitting. The voice model cannot execute tasks itself.
 5. Review it and click “Send to Agent”. Nothing crosses into the normal DSH Agent message flow before that action.
 
 Reply read-aloud and automatic read-aloud remain available on assistant messages and in Settings.
@@ -78,7 +78,7 @@ The model registry includes `doubao/realtime-duplex-3.0` (model `1.2.6.1`). Enab
 
 Saving the provider automatically opens a short connection and reports success only after authentication and Realtime session initialization. Talk to Text no longer stores these provider credentials.
 
-The host proxies the JSON WebSocket protocol at `wss://openspeech.bytedance.com/api/v3/duplex/realtime/dialogue` using the new console's single `X-Api-Key` authentication. Credentials, endpoint, instructions, and tool definitions stay server-owned. The browser streams 16 kHz PCM and plays queued 24 kHz PCM with immediate interruption. Native function calling supplies the same isolated `update_working_draft` side channel used by OpenAI.
+The host proxies the JSON WebSocket protocol at `wss://openspeech.bytedance.com/api/v3/duplex/realtime/dialogue` using the new console's single `X-Api-Key` authentication. Credentials, endpoint, instructions, and tool definitions stay server-owned. The browser streams 16 kHz PCM and plays queued 24 kHz PCM with immediate interruption. Native function calling exposes only draft updates, submission to the primary Agent, and ending the voice session.
 
 ### OpenAI Realtime input
 
@@ -92,7 +92,7 @@ Talk to Text reads compatible GPT Realtime routes from `dsh-multi-model-provider
 
 Realtime receives the current draft, workspace name, and six recent visible user/assistant messages as bounded application context. Hidden system prompts, tool arguments, and reasoning are excluded; the host caps the initial application context at 4,000 characters.
 
-Realtime audio output is the discussion channel; the `update_working_draft` function is the draft-mutation side channel. Pure discussion produces only a spoken reply. Dictation, an explicit edit, an accepted conclusion, or finalization produces the complete new draft, a short mutation summary, and a `drafting/ready` status. The client applies the operation, returns its function result to the same session, and Realtime acknowledges it by voice.
+Realtime audio output is the discussion channel. `update_working_draft` edits or finalizes the draft, `submit_to_agent` atomically writes and sends the final text, and `end_voice_session` closes without submission. The voice model has no execution tools and must leave all task execution to the primary Agent.
 
 ## Settings
 
@@ -111,8 +111,8 @@ Realtime audio output is the discussion channel; the `update_working_draft` func
 - **host** (`dsh/index.js`, `dsh/doubao.js`): resolves registered models and credentials, initializes OpenAI WebRTC or a same-origin Doubao WebSocket proxy, and never exposes long-lived keys
 - **client** (`client/client.js`): uses WebRTC for OpenAI or Web Audio PCM streaming for Doubao, while both backends share the isolated draft-tool path
 - Realtime server VAD creates responses and supports interruption; `update_working_draft` is called only when the draft actually needs to change
-- The client applies the mutation, returns `function_call_output`, and asks the same session for a brief spoken acknowledgement; “Finalize draft” stays in that session
-- “Send to Agent” reuses DSH's native send action, so the main model receives its normal full Agent history plus the finalized draft
+- `submit_to_agent` reuses DSH's native send action, so the main model receives its normal full Agent history plus the finalized draft
+- The voice model can only discuss, edit, submit, or end the session; files, commands, browsing, and other task tools remain with the primary Agent
 
 ## Known limitations
 

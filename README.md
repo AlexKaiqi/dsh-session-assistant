@@ -37,7 +37,7 @@
 |---|---|---|
 | 1 | 💬 双工讨论 | 豆包或 GPT Realtime 用语音回应，用户可随时插话；纯讨论不会触碰草稿 |
 | 2 | ✏️ 工作草稿 | 只有 `update_working_draft` 修改操作会更新完整草稿；支持口述、修改、删除、重排和键盘并行编辑 |
-| 3 | ✅ 定稿与提交 | 点击“整理成最终稿”由注册表中的文本模型基于草稿与语音讨论收束文本；点击“提交给 Agent”才跨过提交边界 |
+| 3 | ✅ 语音定稿与提交 | 说“整理”即可定稿；说“提交”“让 Agent 执行”即可把最终文本发给主 Agent，全程无需点击工作台按钮 |
 | 4 | 🔊 回复朗读 | 每条助手回复旁小喇叭，一键朗读该条；点击变「停止」随时打断 |
 | 5 | 🔁 自动朗读 | 设置页开启后，新回复完成自动朗读（可随时打断） |
 | 6 | ⚙️ 模型注册 | 自动发现兼容 Realtime 路由；只有一个时自动选择，多个时允许切换，密钥留在 host |
@@ -66,8 +66,8 @@ dsh plugin --profile web add dsh-talk-to-text
 1. 点击输入框工具条上的 🎤，直接说还没想清楚的内容、问题、选择或修改要求。
 2. 模型直接用语音回复，你可以随时插话。工作台显示回复转写，下方 Agent 输入框保存完整草稿；两条通道相互独立。
 3. 继续说话或直接键盘修改草稿。并发键盘修改优先，模型不会覆盖它。
-4. 点击“整理成最终稿”，模型基于同一 Realtime 会话中的讨论和当前草稿进行收束。
-5. 检查后点击“提交给 Agent”。只有此时文本才进入 DSH 的正常 Agent 消息链路。
+4. 说“整理一下”即可收束草稿；说“提交”“发给 Agent”“开始执行”即可把最终文本送入 DSH 的正常 Agent 消息链路。
+5. 说“结束语音”会关闭语音会话但不提交。语音模型本身不能执行任务，只有主 Agent 收到提交后才会执行。
 
 回复朗读和自动朗读仍可在助手消息及设置页中使用。
 
@@ -81,7 +81,7 @@ dsh plugin --profile web add dsh-talk-to-text
 
 豆包使用 `wss://openspeech.bytedance.com/api/v3/duplex/realtime/dialogue` 的 JSON WebSocket 协议和新版控制台单 `X-Api-Key` 鉴权。浏览器只连接同源 DSH host；API Key、上游地址、system instructions 和工具定义都由 host 控制，不会下发长期密钥。音频以 16 kHz PCM 上行、24 kHz PCM 下行，支持插话取消。
 
-Duplex 原生函数调用提供 `update_working_draft` 侧通道。用户转写、模型回复和应用上下文留在同一语音会话；纯讨论只输出语音/文本，明确口述、编辑、接受结论或定稿时才提交完整新草稿。点击“整理成最终稿”则自动选择注册表中的非 Realtime 文本模型完成一次独立收束，避免依赖语音协议的文本触发限制。
+Duplex 原生函数调用提供三条受限通道：`update_working_draft` 修改或整理草稿，`submit_to_agent` 原子地写入最终文本并提交主 Agent，`end_voice_session` 只结束语音。语音模型没有执行任务的工具，也不得声称自己完成了 Agent 工作。
 
 ### 使用 GPT Realtime
 
@@ -95,7 +95,7 @@ OPENAI_API_KEY=你的_API_Key dsh web
 
 Realtime 使用 `type: realtime`。它会收到**当前草稿、工作区名和最近 6 条可见用户/助手文本**，所以能理解当前任务和项目术语。隐藏 system prompt、工具参数和思维链不会同步，host 将初始应用上下文截断到 4,000 字符。
 
-Realtime 的音频输出是讨论主通道；`update_working_draft` 函数调用是草稿修改侧通道。纯讨论只产生语音回复，不调用工具；只有口述成稿、明确编辑、接受某个结论或要求定稿时，模型才提交完整新草稿、修改摘要和 `drafting/ready` 状态。客户端执行后把结果回传给同一 Realtime 会话，模型再用语音简短确认。
+Realtime 的音频输出是讨论主通道；三个函数工具分别负责草稿修改、提交主 Agent 和结束语音。纯讨论只产生语音回复；只有用户明确要求提交时，`submit_to_agent` 才会跨过提交边界。
 
 ## 设置项
 
@@ -114,8 +114,8 @@ Realtime 的音频输出是讨论主通道；`update_working_draft` 函数调用
 - **host**（dsh/index.js + dsh/doubao.js）：从模型注册设置解析 Realtime 路由和凭据；OpenAI 初始化 WebRTC，豆包通过同源 WebSocket 代理连接上游；长期 Key 不下发浏览器
 - **client**（client/client.js）：OpenAI 使用 WebRTC；豆包采集并下采样 16 kHz PCM、排队播放 24 kHz PCM；两者都处理独立草稿工具调用
 - Realtime 的 server VAD 自动创建回复并支持插话打断；仅在草稿确实需要变化时调用 `update_working_draft`
-- 客户端应用草稿操作并回传 `function_call_output`，随后让同一会话用语音确认；“整理成最终稿”也在该会话中完成
-- “提交给 Agent”复用 DSH 原生发送动作，因此主模型仍收到完整 Agent 历史和最终草稿
+- `submit_to_agent` 携带完整最终文本并复用 DSH 原生发送动作，因此主模型仍收到完整 Agent 历史和最终草稿
+- 语音模型只能讨论、改稿、提交和结束会话；文件、命令、浏览器及其他任务工具始终属于主 Agent
 
 ## 已知限制
 
@@ -130,7 +130,6 @@ Realtime 的音频输出是讨论主通道；`update_working_draft` 函数调用
 
 - 🎙 按住说话（Space 按住识别、松开发送，对标微信语音）
 - 🔊 edge-tts 高音质音色（XiaoxiaoNeural，Node 端生成 + 附件路由播放）
-- 🗣 语音指令（「保存」「继续」「停止」等口令触发操作）
 - 📼 语音备忘：录音转文字存为会话草稿
 - 🧩 agent 可调用朗读工具（host 注册 read_aloud，模型可在回答时主动朗读）
 

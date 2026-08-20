@@ -73,6 +73,44 @@ export function doubaoDraftTool() {
   }
 }
 
+export function doubaoSubmitTool() {
+  return {
+    type: 'function',
+    name: 'submit_to_agent',
+    description: 'Atomically place the exact final request in the main composer and submit it to the primary Agent. Use only after an explicit spoken instruction to submit, send, proceed, or let the Agent execute it; task-like draft content alone is not permission.',
+    strict: true,
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        draft: {
+          type: 'string',
+          description: 'The complete exact final text that the primary Agent should receive.',
+        },
+      },
+      required: ['draft'],
+    },
+  }
+}
+
+export function doubaoEndSessionTool() {
+  return {
+    type: 'function',
+    name: 'end_voice_session',
+    description: 'End the voice conversation without submitting anything. Use only after an explicit spoken request to end, close, or stop it.',
+    strict: true,
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {},
+    },
+  }
+}
+
+export function doubaoVoiceTools() {
+  return [doubaoDraftTool(), doubaoSubmitTool(), doubaoEndSessionTool()]
+}
+
 export function buildDoubaoDuplexSession(
   model,
   instructions,
@@ -92,7 +130,7 @@ export function buildDoubaoDuplexSession(
           voice: String(voice || 'zh_female_vv_jupiter_bigtts'),
         },
       },
-      tools: [doubaoDraftTool()],
+      tools: doubaoVoiceTools(),
     },
   }
 }
@@ -103,6 +141,36 @@ function localError(socket, message, details = {}) {
     type: 'error',
     error: { message: String(message || 'Doubao Realtime error'), ...details },
   }))
+}
+
+/** Preserve Volcengine's safe diagnostic while never echoing request headers or credentials. */
+async function describeUnexpectedResponse(response) {
+  const status = response.statusCode || 'unknown'
+  const logID = String(response.headers?.['x-tt-logid'] || '')
+  let raw = ''
+  try {
+    for await (const chunk of response) {
+      if (raw.length >= 8_192) break
+      raw += Buffer.isBuffer(chunk) ? chunk.toString('utf8') : String(chunk)
+    }
+  } catch {
+    // The status and log id still make the failed handshake actionable.
+  }
+  let diagnostic = ''
+  try {
+    const parsed = JSON.parse(raw)
+    const error = asObject(parsed?.error)
+    const code = String(error.code || '').trim()
+    const message = String(error.message || '').trim()
+    diagnostic = [code, message].filter(Boolean).join(' · ')
+  } catch {
+    diagnostic = raw.replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, 500)
+  }
+  return [
+    `HTTP ${status}`,
+    diagnostic,
+    logID ? `X-Tt-Logid ${logID}` : '',
+  ].filter(Boolean).join(' · ')
 }
 
 function parseLocalMessage(data, isBinary) {
@@ -199,7 +267,12 @@ export function probeDoubaoDuplex({ endpoint, apiKey, model, voice }, timeoutMs 
       if (event?.type === 'session.created') finish()
       if (event?.type === 'error') finish(new Error(String(event.error?.message || '豆包 Realtime 拒绝了会话')))
     })
-    upstream.on('unexpected-response', (_request, response) => finish(new Error(`豆包 Realtime 鉴权失败：HTTP ${response.statusCode || 'unknown'}`)))
+    upstream.on('unexpected-response', (_request, response) => {
+      void describeUnexpectedResponse(response).then(
+        detail => finish(new Error(`豆包 Realtime 鉴权失败：${detail}`)),
+        () => finish(new Error(`豆包 Realtime 鉴权失败：HTTP ${response.statusCode || 'unknown'}`)),
+      )
+    })
     upstream.on('error', (error) => finish(new Error(`豆包 Realtime 连接失败：${error?.message || error}`)))
     upstream.on('close', (code, reason) => {
       if (!settled) finish(new Error(`豆包 Realtime 在完成测试前关闭：${reason?.toString() || `code ${code}`}`))
@@ -297,7 +370,10 @@ export function registerDoubaoDuplexUpgrade(scope, options) {
                 localError(browser, `豆包 Realtime 初始化失败：${error?.message || error}`)
               })
               upstream.on('unexpected-response', (_request, response) => {
-                localError(browser, `豆包 Realtime 初始化失败：HTTP ${response.statusCode || 'unknown'}`)
+                void describeUnexpectedResponse(response).then(
+                  detail => localError(browser, `豆包 Realtime 初始化失败：${detail}`),
+                  () => localError(browser, `豆包 Realtime 初始化失败：HTTP ${response.statusCode || 'unknown'}`),
+                )
               })
               upstream.on('close', (code, reason) => {
                 const detail = reason?.toString() || `code ${code}`

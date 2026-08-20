@@ -18,7 +18,6 @@ window.__ModuleLoader__.load({ id: "dsh-talk-to-text", factory: (require) => {
   const CONFIG_URL = "/dsh-talk-to-text/config";
   const REALTIME_SESSION_URL = "/dsh-talk-to-text/realtime/session";
   const DOUBAO_REALTIME_URL = "/dsh-talk-to-text/realtime/doubao";
-  const DRAFT_FINALIZE_URL = "/dsh-talk-to-text/draft/finalize";
 
   /* ══════════════════════════ 共享状态 ══════════════════════════ */
 
@@ -85,17 +84,11 @@ window.__ModuleLoader__.load({ id: "dsh-talk-to-text", factory: (require) => {
       ".chatvoice-save:disabled{opacity:.5;cursor:default}",
       ".chatvoice-saved{font-size:12px;color:#3fb950;margin-left:8px}",
       ".chatvoice-error{font-size:12px;color:#f85149;margin-top:8px}",
-      ".chatvoice-workspace{margin:8px 8px 4px;padding:10px 12px;border:1px solid rgba(88,166,255,.38);border-radius:9px;background:rgba(88,166,255,.07);font-size:12px;line-height:1.5}",
-      ".chatvoice-workspace-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}",
-      ".chatvoice-workspace-title{font-weight:650;font-size:12px}",
+      ".chatvoice-workspace{margin:6px 8px 3px;padding:8px 10px;border:1px solid rgba(88,166,255,.38);border-radius:9px;background:rgba(88,166,255,.07);font-size:12px;line-height:1.45}",
+      ".chatvoice-workspace-head{display:flex;align-items:center;min-height:18px;margin-bottom:3px}",
       ".chatvoice-workspace-status{opacity:.65;white-space:nowrap}",
-      ".chatvoice-workspace-reply{white-space:pre-wrap;max-height:120px;overflow:auto}",
-      ".chatvoice-workspace-note{margin-top:5px;opacity:.58}",
-      ".chatvoice-workspace-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}",
-      ".chatvoice-workspace-btn{border:1px solid rgba(127,127,127,.45);border-radius:6px;background:transparent;color:inherit;padding:4px 9px;font-size:12px;cursor:pointer}",
-      ".chatvoice-workspace-btn:hover:not(:disabled){background:rgba(127,127,127,.14)}",
-      ".chatvoice-workspace-btn:disabled{opacity:.4;cursor:default}",
-      ".chatvoice-workspace-primary{border-color:#1f6feb;background:#1f6feb;color:#fff}",
+      ".chatvoice-workspace-reply{white-space:pre-wrap;max-height:96px;overflow:auto}",
+      ".chatvoice-workspace-reply:empty{display:none}",
     ].join("\n");
     document.head.appendChild(s);
   }
@@ -165,18 +158,24 @@ window.__ModuleLoader__.load({ id: "dsh-talk-to-text", factory: (require) => {
     voiceWorkspacePanel = null;
   }
 
-  function submitVoiceDraft(ta, controller) {
+  function submitVoiceDraft(ta, controller, attempt = 0) {
     const draft = String((ta && ta.value) || "").trim();
     if (!draft) { toast("工作草稿还是空的，先说出你的想法"); return; }
-    if (recognition === controller) stopRecognition(ta, controller.button);
-    else try { controller && controller.stop(); } catch { /* ignore */ }
+    if (attempt === 0) {
+      if (recognition === controller) stopRecognition(ta, controller.button);
+      else try { controller && controller.stop(); } catch { /* ignore */ }
+    }
     const card = ta && (ta.closest("[data-composer-card]") || ta.closest("[class*=card]"));
     const buttons = card ? [...card.querySelectorAll("button")] : [];
     const send = buttons.find((button) => {
-      if (button.disabled || button.dataset.chatvoiceMic || button.dataset.chatvoiceWorkspaceAction) return false;
+      if (button.disabled || button.dataset.chatvoiceMic) return false;
       const label = String(button.getAttribute("aria-label") || button.title || "").trim();
       return /^(发送消息|发送|Send message|Send|Submit)$/i.test(label);
     });
+    if (!send && attempt < 5 && ta && !ta.disabled && !ta.readOnly) {
+      setTimeout(() => submitVoiceDraft(ta, controller, attempt + 1), 60);
+      return;
+    }
     if (!send) {
       try { ta.focus(); } catch { /* ignore */ }
       if (ta.disabled || ta.readOnly) {
@@ -206,10 +205,8 @@ window.__ModuleLoader__.load({ id: "dsh-talk-to-text", factory: (require) => {
     root.className = "chatvoice-workspace";
     root.dataset.chatvoiceWorkspace = "1";
     root.innerHTML = [
-      '<div class="chatvoice-workspace-head"><span class="chatvoice-workspace-title">Talk to Text · 双工讨论</span><span class="chatvoice-workspace-status">连接中…</span></div>',
-      '<div class="chatvoice-workspace-reply">直接说出还没想清楚的内容。模型会用语音和你讨论；只有明确的修改操作才会更新下方草稿。</div>',
-      '<div class="chatvoice-workspace-note">语音回复不会写入草稿。草稿只由独立的修改工具更新，且只有“提交给 Agent”或主动按 Enter 才会发送。</div>',
-      '<div class="chatvoice-workspace-actions"><button type="button" class="chatvoice-workspace-btn" data-chatvoice-workspace-action="finalize">整理成最终稿</button><button type="button" class="chatvoice-workspace-btn chatvoice-workspace-primary" data-chatvoice-workspace-action="submit">提交给 Agent</button><button type="button" class="chatvoice-workspace-btn" data-chatvoice-workspace-action="close">关闭</button></div>',
+      '<div class="chatvoice-workspace-head"><span class="chatvoice-workspace-status">连接中</span></div>',
+      '<div class="chatvoice-workspace-reply"></div>',
     ].join("");
     card.insertBefore(root, card.firstChild);
     const panel = {
@@ -218,25 +215,7 @@ window.__ModuleLoader__.load({ id: "dsh-talk-to-text", factory: (require) => {
       controller,
       reply: root.querySelector(".chatvoice-workspace-reply"),
       status: root.querySelector(".chatvoice-workspace-status"),
-      finalize: root.querySelector('[data-chatvoice-workspace-action="finalize"]'),
-      submit: root.querySelector('[data-chatvoice-workspace-action="submit"]'),
     };
-    root.querySelector('[data-chatvoice-workspace-action="finalize"]').addEventListener("click", (event) => {
-      event.preventDefault(); event.stopPropagation();
-      const active = panel.controller;
-      if (!active || typeof active.requestFinalize !== "function" || !active.requestFinalize()) {
-        toast("Realtime 会话已停止；重新点麦克风后可以继续讨论或整理");
-      }
-    });
-    root.querySelector('[data-chatvoice-workspace-action="submit"]').addEventListener("click", (event) => {
-      event.preventDefault(); event.stopPropagation();
-      submitVoiceDraft(panel.ta, panel.controller);
-    });
-    root.querySelector('[data-chatvoice-workspace-action="close"]').addEventListener("click", (event) => {
-      event.preventDefault(); event.stopPropagation();
-      if (recognition === panel.controller) stopRecognition(panel.ta, panel.controller.button);
-      closeVoiceWorkspacePanel();
-    });
     voiceWorkspacePanel = panel;
     return panel;
   }
@@ -247,22 +226,19 @@ window.__ModuleLoader__.load({ id: "dsh-talk-to-text", factory: (require) => {
     if (typeof next.reply === "string" && next.reply.trim()) panel.reply.textContent = next.reply.trim();
     if (next.status === "ready" || next.status === "drafting") controller.draftStatus = next.status;
     if (typeof next.phase === "string") controller.phase = next.phase;
-    const busy = typeof next.busy === "boolean" ? next.busy : !!controller.busy;
     const connected = next.connected !== false;
     const ready = controller.draftStatus === "ready";
     const phaseLabels = {
-      listening: "正在听你说",
-      thinking: "正在思考",
-      editing: "正在修改草稿",
-      speaking: "模型说话中",
+      listening: "聆听中",
+      thinking: "思考中",
+      editing: "修改草稿",
+      speaking: "回复中",
     };
     panel.status.textContent = !connected
       ? "已停止"
       : ready && controller.phase === "listening"
         ? "最终稿就绪"
-        : (phaseLabels[controller.phase] || (ready ? "最终稿就绪" : "双工对话中"));
-    panel.finalize.disabled = busy || !connected;
-    panel.submit.disabled = busy;
+        : (phaseLabels[controller.phase] || (ready ? "最终稿就绪" : "连接中"));
   }
 
   /* ══════════════════════════ 朗读 (speechSynthesis) ══════════════════════════ */
@@ -437,8 +413,9 @@ window.__ModuleLoader__.load({ id: "dsh-talk-to-text", factory: (require) => {
   function voiceEditorInstructions(ta) {
     const context = transcriptionContext(ta);
     return [
-      "You are Talk to Text, a context-aware thinking and drafting partner between the user and a coding agent.",
-      "The user may think aloud, ask a question, explore alternatives, dictate content, edit earlier text, or ask you to finalize it.",
+      "You are Talk to Text, a voice controller in front of the primary Agent. You cannot execute tasks, use the Agent's tools, edit files, browse, run commands, or claim that work was completed.",
+      "Your only capabilities are discussing with the user, maintaining an editable draft, submitting an exact final draft to the primary Agent, and ending this voice session.",
+      "The user may think aloud, ask a question, explore alternatives, dictate content, edit earlier text, ask you to finalize it, or tell you to submit it for execution.",
       "Hold a natural full-duplex voice conversation. Reply in audio, keep replies concise, and allow the user to interrupt you.",
       "Keep spoken conversation and editable draft strictly separate. Spoken replies never enter the draft unless the user explicitly dictates them, requests an edit, or accepts them as part of the result.",
       "Do not copy exploratory chatter or an unaccepted suggestion into the draft. If intent is materially ambiguous, preserve the draft and ask at most one focused question.",
@@ -446,6 +423,11 @@ window.__ModuleLoader__.load({ id: "dsh-talk-to-text", factory: (require) => {
       "Do not call update_working_draft for pure discussion, questions, or unaccepted suggestions. In those cases, only answer by voice.",
       "After a successful draft tool result, briefly acknowledge the change by voice. Never put the conversational reply in tool arguments or read the whole draft aloud unless asked.",
       "When asked to organize or finalize, make the draft polished and self-contained and set status to ready.",
+      "When the user clearly says to submit, send, hand it to the Agent, start execution, or proceed with the drafted request, call submit_to_agent with the complete exact text the primary Agent should receive. This is the only way to submit; never merely say that it was submitted.",
+      "Task-like draft content by itself is not permission to submit. Keep discussing or drafting until the user gives a clear submission instruction.",
+      "If finalization and submission are requested together, call submit_to_agent with the polished final text; do not call update_working_draft first.",
+      "When the user clearly asks to end, close, or stop the voice conversation without submitting, call end_voice_session. Do not use it for a normal pause or interruption.",
+      "Never imply that you personally will execute the submitted request. Say that the primary Agent will handle it only when a spoken clarification is useful.",
       "Preserve technical names, code identifiers, commands, paths, formatting, and the user's intended language.",
       "Conversation excerpts are background only; never copy them into the draft unless asked.",
       context ? "Current application context and editable draft:\n" + context : "The editable draft is initially empty.",
@@ -499,7 +481,10 @@ window.__ModuleLoader__.load({ id: "dsh-talk-to-text", factory: (require) => {
     try { active && active.stop(); } catch { /* ignore */ }
     setMicState(btn, "idle");
     hidePreview();
-    if (active && (active.kind === "openai-realtime" || active.kind === "doubao-realtime")) renderVoiceWorkspace(active, { connected: false, busy: false });
+    if (active && (active.kind === "openai-realtime" || active.kind === "doubao-realtime")) {
+      renderVoiceWorkspace(active, { connected: false, busy: false });
+      closeVoiceWorkspacePanel();
+    }
     try { ta && ta.focus(); } catch { /* ignore */ }
   }
 
@@ -582,33 +567,6 @@ window.__ModuleLoader__.load({ id: "dsh-talk-to-text", factory: (require) => {
       busy: false,
       phase: "connecting",
       draftStatus: "drafting",
-      requestFinalize: () => {
-        if (controller.stopping || controller.busy || !controller.dc || controller.dc.readyState !== "open") return false;
-        turnBaseline = ta && ta.value !== undefined ? ta.value : "";
-        controller.busy = true;
-        renderVoiceWorkspace(controller, { connected: true, busy: true });
-        showPreview("正在整理最终稿…", ta, true);
-        try {
-          controller.dc.send(JSON.stringify({
-            type: "session.update",
-            session: { type: "realtime", instructions: voiceEditorInstructions(ta) },
-          }));
-          controller.dc.send(JSON.stringify({
-            type: "conversation.item.create",
-            item: {
-              type: "message",
-              role: "user",
-              content: [{ type: "input_text", text: "请基于我们的讨论和当前工作草稿，整理成一份成熟、完整、可以直接提交给主 Agent 的最终文本。不要丢失已经确认的约束。" }],
-            },
-          }));
-          controller.dc.send(JSON.stringify({ type: "response.create", response: { output_modalities: ["audio"] } }));
-          return true;
-        } catch {
-          controller.busy = false;
-          renderVoiceWorkspace(controller, { connected: true, busy: false });
-          return false;
-        }
-      },
       stop: () => {
         if (controller.stopping) return;
         controller.stopping = true;
@@ -659,7 +617,6 @@ window.__ModuleLoader__.load({ id: "dsh-talk-to-text", factory: (require) => {
       const baseline = responseBaselines.get(key) ?? turnBaseline;
       const current = ta && ta.value !== undefined ? ta.value : "";
       if (current !== baseline && current !== lastAppliedDraft) {
-        showPreview("检测到键盘修改，未覆盖。模型草稿：\n" + next, ta, false);
         toast("语音模型已生成新草稿，但检测到你同时修改了输入框，因此没有自动覆盖", 5000);
         appliedResponses.add(key);
         return { ok: false, error: "The user edited the draft concurrently, so the proposed draft was not applied.", draft: current };
@@ -668,11 +625,10 @@ window.__ModuleLoader__.load({ id: "dsh-talk-to-text", factory: (require) => {
       lastAppliedDraft = next;
       turnBaseline = next;
       appliedResponses.add(key);
-      if (!controller.stopping) showPreview(next || "草稿已清空", ta, false);
       return { ok: true, draft: next };
     }
 
-    function returnToolResult(call, result) {
+    function returnToolResult(call, result, requestResponse = true) {
       if (controller.stopping || !controller.dc || controller.dc.readyState !== "open" || !call.call_id) {
         controller.busy = false;
         return false;
@@ -681,12 +637,12 @@ window.__ModuleLoader__.load({ id: "dsh-talk-to-text", factory: (require) => {
         type: "conversation.item.create",
         item: { type: "function_call_output", call_id: call.call_id, output: JSON.stringify(result) },
       }));
-      controller.dc.send(JSON.stringify({ type: "response.create", response: { output_modalities: ["audio"] } }));
+      if (requestResponse) controller.dc.send(JSON.stringify({ type: "response.create", response: { output_modalities: ["audio"] } }));
       return true;
     }
 
-    function applyWorkspaceUpdate(key, call) {
-      if (!call || call.name !== "update_working_draft") return false;
+    function applyVoiceTool(key, call) {
+      if (!call || !["update_working_draft", "submit_to_agent", "end_voice_session"].includes(call.name)) return false;
       let args;
       try { args = JSON.parse(String(call.arguments || "{}")); }
       catch {
@@ -697,15 +653,26 @@ window.__ModuleLoader__.load({ id: "dsh-talk-to-text", factory: (require) => {
         try { returnToolResult(call, result); } catch { controller.busy = false; }
         return true;
       }
+      if (call.name === "end_voice_session") {
+        renderVoiceWorkspace(controller, { reply: "语音会话已结束", connected: false, busy: false });
+        try { returnToolResult(call, { ok: true }, false); } catch { /* the session is ending */ }
+        setTimeout(() => {
+          if (recognition === controller) stopRecognition(ta, btn);
+          closeVoiceWorkspacePanel();
+        }, 80);
+        return true;
+      }
       const draft = typeof args.draft === "string" ? args.draft : turnBaseline;
       const summary = (typeof args.summary === "string" && args.summary.trim()) || "已更新工作草稿";
-      const status = args.status === "ready" ? "ready" : "drafting";
+      const submitting = call.name === "submit_to_agent";
+      const status = submitting || args.status === "ready" ? "ready" : "drafting";
       const result = applyDraft(call.call_id || key, draft);
       const appliedStatus = result.ok ? status : controller.draftStatus;
       controller.busy = true;
-      renderVoiceWorkspace(controller, { reply: result.ok ? "草稿操作：" + summary : "草稿未覆盖：检测到同时进行的键盘修改。", status: appliedStatus, phase: "editing", connected: !controller.stopping, busy: true });
-      try { returnToolResult(call, { ...result, status: appliedStatus }); }
+      renderVoiceWorkspace(controller, { reply: result.ok ? (submitting ? "提交给 Agent…" : "草稿操作：" + summary) : "草稿未覆盖：检测到同时进行的键盘修改。", status: appliedStatus, phase: "editing", connected: !controller.stopping, busy: true });
+      try { returnToolResult(call, { ...result, status: appliedStatus }, !submitting); }
       catch { controller.busy = false; }
+      if (submitting && result.ok) setTimeout(() => submitVoiceDraft(ta, controller), 80);
       return true;
     }
 
@@ -733,7 +700,6 @@ window.__ModuleLoader__.load({ id: "dsh-talk-to-text", factory: (require) => {
 
     try {
       warmUpSpeech();
-      showPreview("正在连接 OpenAI Realtime…", ta, true);
       setMicState(btn, "starting");
       const pc = new RTCPeerConnection();
       controller.pc = pc;
@@ -769,7 +735,6 @@ window.__ModuleLoader__.load({ id: "dsh-talk-to-text", factory: (require) => {
         setMicState(btn, "recording");
         controller.phase = "listening";
         renderVoiceWorkspace(controller, { phase: "listening", connected: true, busy: false });
-        showPreview("正在聆听…", ta, true);
       };
       dc.onmessage = (event) => {
         if (session !== recognitionSession) return;
@@ -785,14 +750,12 @@ window.__ModuleLoader__.load({ id: "dsh-talk-to-text", factory: (require) => {
               session: { type: "realtime", instructions: voiceEditorInstructions(ta) },
             }));
           } catch { /* the server-owned initial instructions remain available */ }
-          showPreview("正在听你说…", ta, true);
           renderVoiceWorkspace(controller, { phase: "listening", connected: true, busy: false });
           return;
         }
         if (message.type === "input_audio_buffer.speech_stopped") {
           controller.speechActive = false;
           controller.busy = true;
-          showPreview("正在思考…", ta, true);
           renderVoiceWorkspace(controller, { phase: "thinking", connected: true, busy: true });
           return;
         }
@@ -803,7 +766,6 @@ window.__ModuleLoader__.load({ id: "dsh-talk-to-text", factory: (require) => {
           return;
         }
         if (message.type === "response.function_call_arguments.delta") {
-          showPreview("正在修改工作草稿…", ta, true);
           renderVoiceWorkspace(controller, { phase: "editing", connected: true, busy: true });
           return;
         }
@@ -828,7 +790,8 @@ window.__ModuleLoader__.load({ id: "dsh-talk-to-text", factory: (require) => {
         if (message.type === "response.done") {
           const key = responseKey(message);
           const output = message.response && Array.isArray(message.response.output) ? message.response.output : [];
-          const handled = output.some((item) => applyWorkspaceUpdate(key, item));
+          let handled = false;
+          for (const item of output) handled = applyVoiceTool(key, item) || handled;
           if (handled) return;
           if (message.response && message.response.status && message.response.status !== "completed") {
             controller.busy = false;
@@ -915,7 +878,7 @@ window.__ModuleLoader__.load({ id: "dsh-talk-to-text", factory: (require) => {
     let lastAppliedDraft = turnBaseline;
     const appliedCalls = new Set();
     const responseText = new Map();
-    const dialogTurns = [];
+    let inputTranscript = "";
     const controller = {
       kind: "doubao-realtime",
       button: btn,
@@ -931,44 +894,6 @@ window.__ModuleLoader__.load({ id: "dsh-talk-to-text", factory: (require) => {
       busy: false,
       phase: "connecting",
       draftStatus: "drafting",
-      requestFinalize: () => {
-        if (controller.stopping || controller.busy) return false;
-        const baseline = ta && ta.value !== undefined ? ta.value : "";
-        controller.busy = true;
-        renderVoiceWorkspace(controller, { reply: "正在基于语音讨论整理最终稿…", phase: "editing", connected: true, busy: true });
-        showPreview("正在整理最终稿…", ta, true);
-        const discussion = dialogTurns.slice(-20).map((turn) => turn.role + ": " + turn.text).join("\n");
-        fetch(DRAFT_FINALIZE_URL, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "X-DSH-Talk-To-Text": "1" },
-          body: JSON.stringify({
-            draft: baseline,
-            context: transcriptionContext(ta) + (discussion ? "\n\nVoice discussion:\n" + discussion : ""),
-          }),
-        }).then((response) => response.json().then((body) => ({ response, body })))
-          .then(({ response, body }) => {
-            if (!response.ok || !body || !body.ok || typeof body.draft !== "string") throw new Error((body && body.error) || ("HTTP " + response.status));
-            const current = ta && ta.value !== undefined ? ta.value : "";
-            if (current !== baseline) {
-              showPreview("检测到键盘修改，未覆盖。模型最终稿：\n" + body.draft, ta, false);
-              throw new Error("检测到整理期间的键盘修改，最终稿未自动覆盖");
-            }
-            setTextareaValue(ta, body.draft);
-            lastAppliedDraft = body.draft;
-            turnBaseline = body.draft;
-            controller.draftStatus = "ready";
-            controller.busy = false;
-            syncContext();
-            renderVoiceWorkspace(controller, { reply: "最终稿已整理，可检查后提交给 Agent。", status: "ready", phase: "listening", connected: true, busy: false });
-            showPreview(body.draft, ta, false);
-          })
-          .catch((error) => {
-            controller.busy = false;
-            renderVoiceWorkspace(controller, { reply: "最终稿整理失败：" + ((error && error.message) || error), phase: "listening", connected: true, busy: false });
-            toast("最终稿整理失败：" + ((error && error.message) || error), 6000);
-          });
-        return true;
-      },
       stopPlayback: () => {
         for (const source of controller.playback) {
           try { source.stop(); } catch { /* already stopped */ }
@@ -1006,8 +931,8 @@ window.__ModuleLoader__.load({ id: "dsh-talk-to-text", factory: (require) => {
       send({ type: "context.update", context: transcriptionContext(ta) });
     }
 
-    function applyDraft(call) {
-      if (!call || call.name !== "update_working_draft" || !call.call_id) return false;
+    function applyVoiceTool(call) {
+      if (!call || !call.call_id || !["update_working_draft", "submit_to_agent", "end_voice_session"].includes(call.name)) return false;
       if (appliedCalls.has(call.call_id)) return true;
       let args;
       try { args = JSON.parse(String(call.arguments || "{}")); }
@@ -1016,31 +941,41 @@ window.__ModuleLoader__.load({ id: "dsh-talk-to-text", factory: (require) => {
         toast("豆包返回的草稿修改格式无法解析，请再说一次", 5000);
         return true;
       }
+      if (call.name === "end_voice_session") {
+        appliedCalls.add(call.call_id);
+        send({ type: "tool.result", call_id: call.call_id, output: JSON.stringify({ ok: true }) });
+        renderVoiceWorkspace(controller, { reply: "语音会话已结束", connected: false, busy: false });
+        setTimeout(() => {
+          if (recognition === controller) stopRecognition(ta, btn);
+          closeVoiceWorkspacePanel();
+        }, 80);
+        return true;
+      }
       const next = typeof args.draft === "string" ? args.draft.trim() : turnBaseline;
+      const submitting = call.name === "submit_to_agent";
       const current = ta && ta.value !== undefined ? ta.value : "";
       let result;
       if (current !== turnBaseline && current !== lastAppliedDraft) {
         result = { ok: false, error: "The user edited the draft concurrently, so the proposed draft was not applied.", draft: current };
-        showPreview("检测到键盘修改，未覆盖。模型草稿：\n" + next, ta, false);
         toast("豆包已生成新草稿，但检测到你同时修改了输入框，因此没有自动覆盖", 5000);
       } else {
         if (ta && ta.value !== undefined) setTextareaValue(ta, next);
         lastAppliedDraft = next;
         turnBaseline = next;
-        controller.draftStatus = args.status === "ready" ? "ready" : "drafting";
+        controller.draftStatus = submitting || args.status === "ready" ? "ready" : "drafting";
         result = { ok: true, draft: next, status: controller.draftStatus };
-        showPreview(next || "草稿已清空", ta, false);
       }
       appliedCalls.add(call.call_id);
       send({ type: "tool.result", call_id: call.call_id, output: JSON.stringify(result) });
       syncContext();
       renderVoiceWorkspace(controller, {
-        reply: result.ok ? "草稿操作：" + (String(args.summary || "已更新工作草稿")) : "草稿未覆盖：检测到同时进行的键盘修改。",
+        reply: result.ok ? (submitting ? "提交给 Agent…" : "草稿操作：" + (String(args.summary || "已更新工作草稿"))) : "草稿未覆盖：检测到同时进行的键盘修改。",
         status: controller.draftStatus,
         phase: "editing",
         connected: true,
         busy: true,
       });
+      if (submitting && result.ok) setTimeout(() => submitVoiceDraft(ta, controller), 80);
       return true;
     }
 
@@ -1082,7 +1017,6 @@ window.__ModuleLoader__.load({ id: "dsh-talk-to-text", factory: (require) => {
     renderVoiceWorkspace(controller, { connected: false, busy: false });
     try {
       setMicState(btn, "starting");
-      showPreview("正在连接豆包 Realtime Duplex…", ta, true);
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true },
       });
@@ -1123,37 +1057,42 @@ window.__ModuleLoader__.load({ id: "dsh-talk-to-text", factory: (require) => {
           controller.phase = "listening";
           controller.busy = false;
           setMicState(btn, "recording");
-          showPreview("正在聆听…", ta, true);
           renderVoiceWorkspace(controller, { phase: "listening", connected: true, busy: false });
           return;
         }
         if (message.type === "conversation.item.input_audio_transcription.started") {
           turnBaseline = ta && ta.value !== undefined ? ta.value : "";
+          inputTranscript = "";
           controller.stopPlayback();
           send({ type: "response.cancel" });
           syncContext();
           controller.busy = false;
-          showPreview("正在听你说…", ta, true);
           renderVoiceWorkspace(controller, { phase: "listening", connected: true, busy: false });
           return;
         }
         if (message.type === "conversation.item.input_audio_transcription.delta") {
-          showPreview(String(message.transcript || message.delta || "正在听你说…"), ta, false);
+          inputTranscript = message.transcript
+            ? String(message.transcript)
+            : inputTranscript + String(message.delta || "");
+          renderVoiceWorkspace(controller, {
+            reply: inputTranscript,
+            phase: "listening",
+            connected: true,
+            busy: false,
+          });
           return;
         }
         if (message.type === "conversation.item.input_audio_transcription.completed" || message.type === "input_audio_buffer.committed") {
-          const transcript = String(message.transcript || message.delta || "").trim();
-          if (transcript) dialogTurns.push({ role: "User", text: transcript });
+          const transcript = String(message.transcript || message.delta || inputTranscript).trim();
           controller.busy = true;
-          showPreview("正在思考…", ta, true);
           renderVoiceWorkspace(controller, { phase: "thinking", connected: true, busy: true });
           return;
         }
         if (message.type === "response.function_call_arguments.done") {
           const calls = Array.isArray(message.items) ? message.items : [];
-          const handled = calls.some(applyDraft);
+          let handled = false;
+          for (const call of calls) handled = applyVoiceTool(call) || handled;
           if (handled) {
-            showPreview("正在修改工作草稿…", ta, true);
             renderVoiceWorkspace(controller, { phase: "editing", connected: true, busy: true });
           }
           return;
@@ -1164,7 +1103,6 @@ window.__ModuleLoader__.load({ id: "dsh-talk-to-text", factory: (require) => {
             ? String(message.text || responseText.get(key) || "")
             : (responseText.get(key) || "") + String(message.delta || "");
           responseText.set(key, text);
-          if (message.type.endsWith(".done") && text.trim()) dialogTurns.push({ role: "Assistant", text: text.trim() });
           renderVoiceWorkspace(controller, { reply: text, phase: "speaking", connected: true, busy: true });
           return;
         }
@@ -1179,7 +1117,6 @@ window.__ModuleLoader__.load({ id: "dsh-talk-to-text", factory: (require) => {
         }
         if (message.type === "response.done" || message.type === "response.output_audio.done") {
           controller.busy = false;
-          showPreview("正在聆听…", ta, true);
           renderVoiceWorkspace(controller, { phase: "listening", connected: true, busy: false });
           return;
         }
@@ -1398,7 +1335,7 @@ window.__ModuleLoader__.load({ id: "dsh-talk-to-text", factory: (require) => {
             cfg.realtimeModels = (body.capabilities && Array.isArray(body.capabilities.realtimeModels)) ? body.capabilities.realtimeModels : [];
             setState((s) => ({ ...s, saving: false, saved: true, value: { ...cfg } }));
             refreshMicButtonSupport();
-            toast("Talk to Text 设置已保存，立即生效");
+            toast("设置已保存");
           } else {
             setState((s) => ({ ...s, saving: false, error: (body && body.error) || "保存失败" }));
           }
@@ -1427,11 +1364,9 @@ window.__ModuleLoader__.load({ id: "dsh-talk-to-text", factory: (require) => {
           : (srSupported() ? "● 浏览器原生语音识别可用" : "○ 当前浏览器不支持原生语音识别（推荐 Edge 或 Chrome）")));
 
     return react.createElement("div", { style: { padding: "14px 0", maxWidth: 560 } }, [
-      react.createElement("div", { key: "t", style: { fontSize: 16, fontWeight: 600, marginBottom: 4 } }, "Talk to Text 语音设置"),
-      react.createElement("div", { key: "d", style: { fontSize: 12, opacity: 0.6, marginBottom: 10 } }, "通过自然语音与上下文感知模型共同思考，持续维护可编辑草稿，定稿后再提交给主 Agent"),
       react.createElement("div", { key: "s", className: "chatvoice-status" }, status),
       react.createElement("div", { key: "provider", className: "chatvoice-field" }, [
-        react.createElement("label", { key: "l", className: "chatvoice-label" }, "识别后端 / Recognition provider"),
+        react.createElement("label", { key: "l", className: "chatvoice-label" }, "语音方式"),
         react.createElement("select", {
           key: "i", className: "chatvoice-input", value: selectedProvider,
           onChange: (e) => set("recognitionProvider", e.target.value),
@@ -1442,7 +1377,7 @@ window.__ModuleLoader__.load({ id: "dsh-talk-to-text", factory: (require) => {
         ]),
       ]),
       selectedProvider === "browser" ? react.createElement("div", { key: "f1", className: "chatvoice-field" }, [
-        react.createElement("label", { key: "l", className: "chatvoice-label" }, "识别语言 / Recognition language"),
+        react.createElement("label", { key: "l", className: "chatvoice-label" }, "识别语言"),
         react.createElement("select", {
           key: "i", className: "chatvoice-input", value: state.value.recognitionLang,
           onChange: (e) => set("recognitionLang", e.target.value),
@@ -1452,7 +1387,7 @@ window.__ModuleLoader__.load({ id: "dsh-talk-to-text", factory: (require) => {
         ]),
       ]) : null,
       selectedProvider === "openai-realtime" ? react.createElement("div", { key: "rt", className: "chatvoice-field" }, [
-        react.createElement("label", { key: "l", className: "chatvoice-label" }, "Realtime 共同思考模型"),
+        react.createElement("label", { key: "l", className: "chatvoice-label" }, "Realtime 模型"),
         react.createElement("select", {
           key: "i", className: "chatvoice-input",
           value: state.value.openaiRealtimeModel || (openaiModels[0] && openaiModels[0].id) || "",
@@ -1461,8 +1396,7 @@ window.__ModuleLoader__.load({ id: "dsh-talk-to-text", factory: (require) => {
         }, openaiModels.length
           ? openaiModels.map((model) => react.createElement("option", { key: model.id, value: model.id }, (model.displayName || model.model) + " · " + model.provider))
           : [react.createElement("option", { key: "none", value: "" }, "未发现已注册的 Realtime 模型")]),
-        react.createElement("div", { key: "h", className: "chatvoice-hint" }, "来自模型注册插件；只有一个时自动选中，新注册的兼容模型会自动出现在此处。密钥仅由 DSH host 解析。"),
-        react.createElement("label", { key: "cl", className: "chatvoice-label", style: { marginTop: 10 } }, "共同思考上下文 / Deliberation context"),
+        react.createElement("label", { key: "cl", className: "chatvoice-label", style: { marginTop: 10 } }, "上下文"),
         react.createElement("select", {
           key: "ci", className: "chatvoice-input",
           value: state.value.openaiContextMode || "recent",
@@ -1472,10 +1406,9 @@ window.__ModuleLoader__.load({ id: "dsh-talk-to-text", factory: (require) => {
           react.createElement("option", { key: "draft", value: "draft" }, "仅当前草稿"),
           react.createElement("option", { key: "off", value: "off" }, "不同步上下文"),
         ]),
-        react.createElement("div", { key: "ch", className: "chatvoice-hint" }, "模型据此理解当前任务、讨论想法和草稿修改；不包含隐藏 system prompt、工具参数或思维链，初始应用上下文最多约 4,000 字符。"),
       ]) : null,
       selectedProvider === "doubao-realtime" ? react.createElement("div", { key: "doubao-rt", className: "chatvoice-field" }, [
-        react.createElement("label", { key: "l", className: "chatvoice-label" }, "豆包 Realtime 共同思考模型"),
+        react.createElement("label", { key: "l", className: "chatvoice-label" }, "Realtime 模型"),
         react.createElement("select", {
           key: "i", className: "chatvoice-input",
           value: state.value.doubaoRealtimeModel || (doubaoModels[0] && doubaoModels[0].id) || "",
@@ -1484,8 +1417,7 @@ window.__ModuleLoader__.load({ id: "dsh-talk-to-text", factory: (require) => {
         }, doubaoModels.length
           ? doubaoModels.map((model) => react.createElement("option", { key: model.id, value: model.id }, (model.displayName || model.model) + " · 火山引擎"))
           : [react.createElement("option", { key: "none", value: "" }, "未发现已注册的豆包 Duplex 模型")]),
-        react.createElement("div", { key: "h", className: "chatvoice-hint" }, "使用豆包 Realtime Speech 3.0 / Seeduplex 的 JSON WebSocket 协议；模型与凭据在“设置 → 模型 → 豆包语音”统一注册。"),
-        react.createElement("label", { key: "cl", className: "chatvoice-label", style: { marginTop: 10 } }, "共同思考上下文 / Deliberation context"),
+        react.createElement("label", { key: "cl", className: "chatvoice-label", style: { marginTop: 10 } }, "上下文"),
         react.createElement("select", {
           key: "ci", className: "chatvoice-input",
           value: state.value.openaiContextMode || "recent",
@@ -1495,7 +1427,6 @@ window.__ModuleLoader__.load({ id: "dsh-talk-to-text", factory: (require) => {
           react.createElement("option", { key: "draft", value: "draft" }, "仅当前草稿"),
           react.createElement("option", { key: "off", value: "off" }, "不同步上下文"),
         ]),
-        react.createElement("div", { key: "ch", className: "chatvoice-hint" }, "初始上下文与后续草稿快照都会同步到语音模型；草稿仍只能由 update_working_draft 工具修改。"),
       ]) : null,
       react.createElement("div", { key: "f2", className: "chatvoice-field" }, [
         react.createElement("label", { key: "l", className: "chatvoice-label" }, [
@@ -1515,16 +1446,15 @@ window.__ModuleLoader__.load({ id: "dsh-talk-to-text", factory: (require) => {
         ]),
       ]),
       react.createElement("div", { key: "f3", className: "chatvoice-field" }, [
-        react.createElement("label", { key: "l", className: "chatvoice-label" }, "音色 / Voice name（留空自动选最佳中文音色）"),
+        react.createElement("label", { key: "l", className: "chatvoice-label" }, "朗读音色"),
         react.createElement("input", {
           key: "i", type: "text", className: "chatvoice-input", value: state.value.voiceName || "",
           placeholder: "如：Microsoft Xiaoxiao Online (Natural) - Chinese (Mainland)",
           onChange: (e) => set("voiceName", e.target.value),
         }),
-        react.createElement("div", { key: "h", className: "chatvoice-hint" }, "Edge 内置 Xiaoxiao Online (Natural) 免费中文音色最自然；音色列表随浏览器异步加载"),
       ]),
       react.createElement("div", { key: "f4", className: "chatvoice-field" }, [
-        react.createElement("label", { key: "l", className: "chatvoice-label" }, "语速 / Rate（0.5 慢 ~ 2 快）"),
+        react.createElement("label", { key: "l", className: "chatvoice-label" }, "朗读语速"),
         react.createElement("input", {
           key: "i", type: "number", className: "chatvoice-input", min: 0.5, max: 2, step: 0.1,
           value: state.value.rate, onChange: (e) => set("rate", Number(e.target.value)),

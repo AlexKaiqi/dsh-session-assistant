@@ -246,6 +246,8 @@ function selectRealtimeModel(config, models, backend = 'openai') {
 }
 
 const VOICE_WORKSPACE_TOOL = 'update_working_draft'
+const SUBMIT_TO_AGENT_TOOL = 'submit_to_agent'
+const END_VOICE_SESSION_TOOL = 'end_voice_session'
 
 function voiceWorkspaceTool() {
   return {
@@ -275,11 +277,48 @@ function voiceWorkspaceTool() {
   }
 }
 
+function submitToAgentTool() {
+  return {
+    type: 'function',
+    name: SUBMIT_TO_AGENT_TOOL,
+    description: 'Atomically place the exact final request in the main composer and submit it to the primary Agent. Call only after an explicit spoken instruction to submit, send, proceed, or let the Agent execute it; task-like draft content alone is not permission.',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {
+        draft: {
+          type: 'string',
+          description: 'The complete exact final text that the primary Agent should receive.',
+        },
+      },
+      required: ['draft'],
+    },
+  }
+}
+
+function endVoiceSessionTool() {
+  return {
+    type: 'function',
+    name: END_VOICE_SESSION_TOOL,
+    description: 'End the voice conversation without submitting anything. Call only after an explicit spoken request to end, close, or stop the voice session.',
+    parameters: {
+      type: 'object',
+      additionalProperties: false,
+      properties: {},
+    },
+  }
+}
+
+function voiceWorkspaceTools() {
+  return [voiceWorkspaceTool(), submitToAgentTool(), endVoiceSessionTool()]
+}
+
 function realtimeEditorInstructions(context = '') {
   const bounded = normalizeTranscriptionContext(context)
   return [
-    'You are Talk to Text, a context-aware thinking and drafting partner between the user and a coding agent.',
-    'The user may think aloud, ask a question, explore alternatives, dictate content, edit earlier text, or ask you to finalize it.',
+    'You are Talk to Text, a voice controller in front of the primary Agent. You cannot execute tasks, use the Agent\'s tools, edit files, browse, run commands, or claim that work was completed.',
+    'Your only capabilities are discussing with the user, maintaining an editable draft, submitting an exact final draft to the primary Agent, and ending this voice session.',
+    'The user may think aloud, ask a question, explore alternatives, dictate content, edit earlier text, ask you to finalize it, or tell you to submit it for execution.',
     'Hold a natural full-duplex voice conversation. Reply to the user in audio, keep replies concise, and allow the user to interrupt you.',
     'Keep the spoken conversation and the editable draft strictly separate. What you say is discussion and must not enter the draft unless the user explicitly dictates it, requests an edit, or accepts it as part of the result.',
     'Do not copy exploratory chatter or an unaccepted suggestion into the draft. If intent is materially ambiguous, preserve the draft and ask at most one focused question.',
@@ -287,6 +326,11 @@ function realtimeEditorInstructions(context = '') {
     `Do not call ${VOICE_WORKSPACE_TOOL} for pure discussion, questions, or unaccepted suggestions that leave the draft unchanged. In those cases, only answer by voice.`,
     'After a successful draft tool result, briefly acknowledge the change by voice. Never put a conversational reply in the tool arguments and never read the whole draft aloud unless asked.',
     'When the user asks to organize, finalize, or prepare the result, make the draft polished and self-contained and set status to ready.',
+    `When the user clearly says to submit, send, hand it to the Agent, start execution, or proceed with the drafted request, call ${SUBMIT_TO_AGENT_TOOL} with the complete exact text the primary Agent should receive. This is the only way to submit; never merely say that it was submitted.`,
+    'Task-like draft content by itself is not permission to submit. Keep discussing or drafting until the user gives a clear submission instruction.',
+    `If finalization and submission are requested together, call ${SUBMIT_TO_AGENT_TOOL} with the polished final text; do not call ${VOICE_WORKSPACE_TOOL} first.`,
+    `When the user clearly asks to end, close, or stop the voice conversation without submitting, call ${END_VOICE_SESSION_TOOL}. Do not use it for a normal pause or interruption.`,
+    'Never imply that you personally will execute the submitted request. Say that the primary Agent will handle it only when a spoken clarification is useful.',
     'Preserve technical names, code identifiers, commands, file paths, formatting, and the user\'s intended language.',
     'Conversation excerpts are background context only; never copy them into the draft unless the user asks.',
     bounded ? `Current application context and editable draft:\n${bounded}` : 'The editable draft is initially empty.',
@@ -300,7 +344,7 @@ function buildRealtimeEditorSession(model, context = '') {
     output_modalities: ['audio'],
     instructions: realtimeEditorInstructions(context),
     max_output_tokens: 4_096,
-    tools: [voiceWorkspaceTool()],
+    tools: voiceWorkspaceTools(),
     tool_choice: 'auto',
     audio: {
       input: {
@@ -635,5 +679,5 @@ export {
   CONFIG_PATH, buildRealtimeEditorSession, effectiveConfig, normalize,
   normalizeTranscriptionContext, realtimeCallsUrl, realtimeEditorInstructions,
   discoverRealtimeModels, registeredRealtimeModels, selectRealtimeModel,
-  voiceWorkspaceTool,
+  endVoiceSessionTool, submitToAgentTool, voiceWorkspaceTool, voiceWorkspaceTools,
 }

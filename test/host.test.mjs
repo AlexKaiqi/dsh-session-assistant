@@ -12,10 +12,13 @@ import {
   registeredRealtimeModels,
   realtimeCallsUrl,
   realtimeEditorInstructions,
+  submitToAgentTool,
   voiceWorkspaceTool,
+  voiceWorkspaceTools,
 } from '../dsh/index.js'
 import {
   buildDoubaoDuplexSession,
+  doubaoVoiceTools,
   functionResultEvent,
   isSameOriginUpgrade,
   safeUpstreamEvent,
@@ -153,7 +156,11 @@ test('builds a Doubao Duplex session with PCM audio and the isolated draft tool'
   assert.equal(built.session.audio.input.format.rate, 16000)
   assert.equal(built.session.audio.output.format.rate, 24000)
   assert.equal(built.session.audio.output.voice, 'zh_female_vv_jupiter_bigtts')
-  assert.equal(built.session.tools[0].name, 'update_working_draft')
+  assert.deepEqual(built.session.tools.map(tool => tool.name), [
+    'update_working_draft',
+    'submit_to_agent',
+    'end_voice_session',
+  ])
   assert.equal(built.session.tools[0].strict, true)
   assert.match(built.session.instructions, /Current draft/)
 })
@@ -249,7 +256,7 @@ test('builds a full-duplex Realtime workspace with optional draft mutations', ()
     output_modalities: ['audio'],
     instructions: session.instructions,
     max_output_tokens: 4096,
-    tools: [voiceWorkspaceTool()],
+    tools: voiceWorkspaceTools(),
     tool_choice: 'auto',
     audio: {
       input: {
@@ -269,6 +276,9 @@ test('builds a full-duplex Realtime workspace with optional draft mutations', ()
   })
   assert.match(session.instructions, /full-duplex voice conversation/)
   assert.match(session.instructions, /update_working_draft/)
+  assert.match(session.instructions, /cannot execute tasks/)
+  assert.match(session.instructions, /submit_to_agent/)
+  assert.match(session.instructions, /end_voice_session/)
   assert.match(session.instructions, /only channel that may mutate the draft/)
   assert.match(session.instructions, /RTCPeerConnection/)
 })
@@ -283,15 +293,61 @@ test('draft tool contains only the mutation result and no conversational reply',
   assert.match(realtimeEditorInstructions('Current draft: hello'), /spoken conversation and the editable draft strictly separate/)
 })
 
+test('voice tools make submission explicit and keep execution with the primary Agent', () => {
+  assert.deepEqual(voiceWorkspaceTools().map(tool => tool.name), [
+    'update_working_draft',
+    'submit_to_agent',
+    'end_voice_session',
+  ])
+  assert.deepEqual(doubaoVoiceTools().map(tool => tool.name), [
+    'update_working_draft',
+    'submit_to_agent',
+    'end_voice_session',
+  ])
+  const submit = submitToAgentTool()
+  assert.deepEqual(submit.parameters.required, ['draft'])
+  assert.match(submit.description, /primary Agent/)
+  assert.match(realtimeEditorInstructions(''), /cannot execute tasks/)
+  assert.match(realtimeEditorInstructions(''), /only way to submit/)
+})
+
 test('web client keeps remote audio, transcripts, and draft mutations on separate paths', () => {
   const source = readFileSync(new URL('../client/client.js', import.meta.url), 'utf8')
   assert.match(source, /pc\.ontrack =/)
   assert.match(source, /remoteAudio\.srcObject = remoteStream/)
   assert.match(source, /response\.output_audio_transcript\.delta/)
-  assert.match(source, /call\.name !== "update_working_draft"/)
+  assert.match(source, /\["update_working_draft", "submit_to_agent", "end_voice_session"\]\.includes\(call\.name\)/)
   assert.match(source, /type: "function_call_output"/)
   assert.match(source, /output_modalities: \["audio"\]/)
   assert.doesNotMatch(source, /applyDraft\(key, (?:responseTranscript|text|complete)/)
+})
+
+test('Realtime discussion uses one compact voice-only workspace while browser dictation keeps its preview', () => {
+  const source = readFileSync(new URL('../client/client.js', import.meta.url), 'utf8')
+  const openai = source.slice(
+    source.indexOf('async function startOpenAIRealtime'),
+    source.indexOf('function bytesToBase64'),
+  )
+  const doubao = source.slice(
+    source.indexOf('async function startDoubaoRealtime'),
+    source.indexOf('function toggleMic'),
+  )
+  const browser = source.slice(
+    source.indexOf('function startBrowserRecognition'),
+    source.indexOf('async function startOpenAIRealtime'),
+  )
+
+  assert.doesNotMatch(openai, /showPreview\(/)
+  assert.doesNotMatch(doubao, /showPreview\(/)
+  assert.match(browser, /showPreview\(/)
+  assert.doesNotMatch(source, /chatvoice-workspace-(?:title|note)/)
+  assert.doesNotMatch(source, /Talk to Text · 双工讨论/)
+  assert.doesNotMatch(source, /data-chatvoice-workspace-action/)
+  assert.doesNotMatch(source, /requestFinalize/)
+  assert.match(openai, /"submit_to_agent"/)
+  assert.match(openai, /submitVoiceDraft\(ta, controller\)/)
+  assert.match(doubao, /"submit_to_agent"/)
+  assert.match(doubao, /submitVoiceDraft\(ta, controller\)/)
 })
 
 test('Realtime session route resolves the registered model and keeps its credential server-side', async () => {
@@ -322,7 +378,11 @@ test('Realtime session route resolves the registered model and keeps its credent
     assert.equal(session.model, 'gpt-realtime-2.1')
     assert.deepEqual(session.output_modalities, ['audio'])
     assert.equal(session.tool_choice, 'auto')
-    assert.equal(session.tools[0].name, 'update_working_draft')
+    assert.deepEqual(session.tools.map(tool => tool.name), [
+      'update_working_draft',
+      'submit_to_agent',
+      'end_voice_session',
+    ])
     assert.equal(session.audio.input.turn_detection.interrupt_response, true)
     assert.equal(session.audio.output.voice, 'marin')
     assert.match(session.instructions, /Current draft: keep RTCPeerConnection/)
