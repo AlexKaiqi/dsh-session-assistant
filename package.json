@@ -1,7 +1,7 @@
 {
-  "name": "dsh-talk-to-text",
-  "version": "0.3.0",
-  "description": "Talk to Text — full-duplex contextual voice deliberation with tool-controlled editable drafting for DeepSeek Harness.",
+  "name": "dsh-session-assistant",
+  "version": "0.1.0",
+  "description": "Session-scoped full-duplex voice assistant with tool-controlled drafting and Agent submission for DeepSeek Harness.",
   "type": "module",
   "main": "./dsh/index.js",
   "exports": {
@@ -42,8 +42,7 @@
     "node": ">=18"
   },
   "dependencies": {
-    "@deepseek-ai/schemastery": "^3.18.1",
-    "ws": "^8.21.0"
+    "@deepseek-ai/schemastery": "^3.18.1"
   },
   "dsh": {
     "inventory": {
@@ -53,10 +52,7 @@
       },
       "tags": ["voice", "realtime", "drafting", "productivity"],
       "dependencies": [
-        "dsh-multi-model-provider",
-        "@deepseek-ai/dsh-llm",
-        "@deepseek-ai/dsh-settings",
-        "@deepseek-ai/dsh-credentials"
+        "dsh-realtime-voice"
       ]
     },
     "bundle": {
@@ -69,21 +65,17 @@
       "platform": "web"
     }
   },
+  "author": "FuzzySoul",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/AlexKaiqi/dsh-talk-to-text.git"
+    "url": "git+https://github.com/AlexKaiqi/dsh-session-assistant.git"
   },
   "bugs": {
-    "url": "https://github.com/AlexKaiqi/dsh-talk-to-text/issues"
+    "url": "https://github.com/AlexKaiqi/dsh-session-assistant/issues"
   },
-  "homepage": "https://github.com/AlexKaiqi/dsh-talk-to-text#readme",
-  "author": "FuzzySoul",
-  "devDependencies": {
-    "puppeteer-core": "^25.7.0"
-  },
+  "homepage": "https://github.com/AlexKaiqi/dsh-session-assistant#readme",
   "scripts": {
     "test": "node --test test/*.test.mjs",
-    "e2e": "node scripts/e2e.mjs",
-    "gif": "node scripts/gif.mjs"
+    "check": "node --check dsh/index.js && node --check client/client.js && npm test"
   }
 }

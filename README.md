@@ -1,148 +1,34 @@
-# Talk to Text 🎤🔊 — dsh-talk-to-text
+# dsh-session-assistant
 
-[English](README.en.md) | **中文**
+让用户通过自然语音与一个上下文感知的模型共同思考，并持续维护一份可编辑草稿，最终将成熟的意图或成品文本提交给主 Agent。
 
-> **让用户通过自然语音与一个上下文感知的模型共同思考，并持续维护一份可编辑草稿，最终将成熟的意图或成品文本提交给主 Agent。**
-> 默认使用模型注册表中的豆包 Realtime Duplex 3.0；同时保留 OpenAI Realtime 与免费、只追加的浏览器 Web Speech 回退。
+这是坐在当前 Session 上的产品/UI 插件。它不连接语音厂商、不读取 API Key，也不能替主 Agent 执行任务。
 
-<p align="center">
-  <img src="docs/demo-input.gif" alt="语音输入" width="600"/><br/>
-  <sub>🎤 语音输入：确认句逐句实时入框，中间结果进气泡</sub>
-</p>
+## 边界
 
-<p align="center">
-  <img src="docs/demo-speak.gif" alt="回复朗读" width="600"/><br/>
-  <sub>🔊 回复朗读：点小喇叭一键朗读，可随时打断</sub>
-</p>
+- `dsh-session-assistant`：当前 Session 的上下文投影、角色、三项语音操作和页面 UI。
+- `dsh-realtime-voice`：注册模型发现、凭据解析、OpenAI WebRTC、豆包 WebSocket 和 Provider 会话装配。
+- `dsh-personal-knowledge-base`：长期知识及当前 focus；尚未作为本插件的硬依赖。
 
-<p align="center">
-  <img src="docs/demo-edit.gif" alt="边听边改" width="600"/><br/>
-  <sub>✏️ 边听边改：豆包/OpenAI Realtime 可修改前文；浏览器回退仍是只追加</sub>
-</p>
+语音模型只得到以下能力：
 
-<p align="center">
-  <img src="https://img.shields.io/badge/零配置-zero--config-blue" alt="零配置"/>
-  <img src="https://img.shields.io/badge/GPT-Realtime-4c8bf5" alt="GPT Realtime"/>
-  <img src="https://img.shields.io/badge/豆包-Realtime_Duplex-f05a28" alt="豆包 Realtime Duplex"/>
-  <img src="https://img.shields.io/badge/浏览器回退-免_API_Key-brightgreen" alt="浏览器回退免 API Key"/>
-  <img src="https://img.shields.io/npm/v/dsh-talk-to-text" alt="npm"/>
-  <img src="https://img.shields.io/badge/license-MIT-lightgrey" alt="MIT"/>
-</p>
+1. `update_working_draft`：用完整文本更新当前草稿。
+2. `submit_to_agent`：用户明确说“提交/执行”后，将完整文本放入输入区并提交给主 Agent。
+3. `end_voice_session`：用户明确要求结束时关闭语音连接；不提交内容。
 
-**Talk to Text = Talk → Deliberate → Draft → Revise → Commit**。它不是单纯的语音转文字：用户可以与 Realtime 模型进行可随时插话的双工语音讨论；模型语音回复不进入草稿，只有独立的草稿修改操作才会改变文本，且只有用户明确提交时才发给主 Agent。
+讨论中的口头回复不会自动进入草稿。语音模型不能访问主 Agent 工具、文件、终端、网络或 Provider 凭据。
 
-## 功能
+## 运行依赖
 
-| # | 功能 | 说明 |
-|---|---|---|
-| 1 | 💬 双工讨论 | 豆包或 GPT Realtime 用语音回应，用户可随时插话；纯讨论不会触碰草稿 |
-| 2 | ✏️ 工作草稿 | 只有 `update_working_draft` 修改操作会更新完整草稿；支持口述、修改、删除、重排和键盘并行编辑 |
-| 3 | ✅ 语音定稿与提交 | 说“整理”即可定稿；说“提交”“让 Agent 执行”即可把最终文本发给主 Agent，全程无需点击工作台按钮 |
-| 4 | 🔊 回复朗读 | 每条助手回复旁小喇叭，一键朗读该条；点击变「停止」随时打断 |
-| 5 | 🔁 自动朗读 | 设置页开启后，新回复完成自动朗读（可随时打断） |
-| 6 | ⚙️ 模型注册 | 自动发现兼容 Realtime 路由；只有一个时自动选择，多个时允许切换，密钥留在 host |
+先安装 `dsh-realtime-voice`，再安装本插件。Realtime 模型及凭据继续在 DSH 模型注册中配置；本插件的设置页只选择已注册的可用路由。
 
-## 为什么推荐 Edge
+浏览器兜底听写与主 Agent 回复朗读仍保留。Session 配置保存在 `~/.dsh/session-assistant.json`，首次运行会读取旧的 `talk-to-text.json` 作为迁移来源。
 
-| 能力 | Chrome | Edge | 说明 |
-|---|---|---|---|
-| 语音识别 | ✅（识别走 Google 服务器） | ✅（**识别走 Azure，国内更稳**） | 国内网络下 Chrome 可能报 network 错误 |
-| 朗读音色 | 部分在线音色 | ✅ **Xiaoxiao Online (Natural)** 免费中文最自然 | 在线音色需联网 |
-| 麦克风（安全上下文） | 仅 localhost/HTTPS | 同左 | dsh web 默认 http://127.0.0.1:3080 ✅；LAN IP 访问麦克风不可用（朗读不受影响） |
-
-## 安装
+## 验证
 
 ```bash
-dsh plugin --profile web add dsh-talk-to-text
-# 或手动: pnpm add dsh-talk-to-text（dsh.profile.bundles 会自动 reconcile）
+pnpm test
+pnpm check
 ```
 
-重启 dsh web（dsh web），打开 http://127.0.0.1:3080 即可。
-
-> ⚠️ 必须用 127.0.0.1 访问：语音识别需要安全上下文（HTTPS 或 localhost），LAN IP 直连时麦克风会被浏览器禁用（自动禁用输入功能并提示，朗读仍可用）。
-
-## 使用
-
-1. 点击输入框工具条上的 🎤，直接说还没想清楚的内容、问题、选择或修改要求。
-2. 模型直接用语音回复，你可以随时插话。工作台显示回复转写，下方 Agent 输入框保存完整草稿；两条通道相互独立。
-3. 继续说话或直接键盘修改草稿。并发键盘修改优先，模型不会覆盖它。
-4. 说“整理一下”即可收束草稿；说“提交”“发给 Agent”“开始执行”即可把最终文本送入 DSH 的正常 Agent 消息链路。
-5. 说“结束语音”会关闭语音会话但不提交。语音模型本身不能执行任务，只有主 Agent 收到提交后才会执行。
-
-回复朗读和自动朗读仍可在助手消息及设置页中使用。
-
-### 使用豆包 Realtime Duplex（默认）
-
-模型注册插件内置 `doubao/realtime-duplex-3.0`（模型 `1.2.6.1`）。在“设置 → 模型 → 豆包语音”中启用它，只需配置：
-
-- `DOUBAO_API_KEY`
-
-保存 Provider 时会自动建立一次短连接，只有鉴权和 Realtime 会话初始化成功才显示测试通过。Talk to Text 本身不再保存这些凭据。
-
-豆包使用 `wss://openspeech.bytedance.com/api/v3/duplex/realtime/dialogue` 的 JSON WebSocket 协议和新版控制台单 `X-Api-Key` 鉴权。浏览器只连接同源 DSH host；API Key、上游地址、system instructions 和工具定义都由 host 控制，不会下发长期密钥。音频以 16 kHz PCM 上行、24 kHz PCM 下行，支持插话取消。
-
-Duplex 原生函数调用提供三条受限通道：`update_working_draft` 修改或整理草稿，`submit_to_agent` 原子地写入最终文本并提交主 Agent，`end_voice_session` 只结束语音。语音模型没有执行任务的工具，也不得声称自己完成了 Agent 工作。
-
-### 使用 GPT Realtime
-
-插件从 `dsh-multi-model-provider` 和 `llm-pi-ai` 的注册设置中读取兼容的 GPT Realtime 路由。只有一个时自动选中；注册多个后，设置页自动显示下拉选择。模型、Base URL 和凭据引用均以注册表为准。
-
-凭据由 DSH host 安全解析，不会保存到 `~/.dsh/talk-to-text.json`，也不会下发浏览器。如果注册路由使用 `OPENAI_API_KEY`，也可通过环境变量提供：
-
-```bash
-OPENAI_API_KEY=你的_API_Key dsh web
-```
-
-Realtime 使用 `type: realtime`。它会收到**当前草稿、工作区名和最近 6 条可见用户/助手文本**，所以能理解当前任务和项目术语。隐藏 system prompt、工具参数和思维链不会同步，host 将初始应用上下文截断到 4,000 字符。
-
-Realtime 的音频输出是讨论主通道；三个函数工具分别负责草稿修改、提交主 Agent 和结束语音。纯讨论只产生语音回复；只有用户明确要求提交时，`submit_to_agent` 才会跨过提交边界。
-
-## 设置项
-
-| 设置 | 默认 | 说明 |
-|---|---|---|
-| 识别后端 | 豆包 Realtime Duplex | `doubao-realtime` / `openai-realtime` 使用注册模型；`browser` 是免费回退 |
-| 识别语言 | zh-CN | zh-CN / en-US |
-| Realtime 模型 | 注册表第一个兼容路由 | 自动发现并允许从多个已注册模型中选择 |
-| 共同思考上下文 | 草稿 + 最近可见对话 | 也可选择仅草稿或关闭 |
-| 自动朗读 | 关 | 新回复完成后自动朗读（建议默认关，别太吵） |
-| 音色 | 空 = 自动 | 自动选最佳中文音色（Xiaoxiao Online (Natural)）；可填任意浏览器音色名 |
-| 语速 | 1.0 | 0.5（慢）～ 2（快） |
-
-## 工作原理
-
-- **host**（dsh/index.js + dsh/doubao.js）：从模型注册设置解析 Realtime 路由和凭据；OpenAI 初始化 WebRTC，豆包通过同源 WebSocket 代理连接上游；长期 Key 不下发浏览器
-- **client**（client/client.js）：OpenAI 使用 WebRTC；豆包采集并下采样 16 kHz PCM、排队播放 24 kHz PCM；两者都处理独立草稿工具调用
-- Realtime 的 server VAD 自动创建回复并支持插话打断；仅在草稿确实需要变化时调用 `update_working_draft`
-- `submit_to_agent` 携带完整最终文本并复用 DSH 原生发送动作，因此主模型仍收到完整 Agent 历史和最终草稿
-- 语音模型只能讨论、改稿、提交和结束会话；文件、命令、浏览器及其他任务工具始终属于主 Agent
-
-## 已知限制
-
-- Chrome 的语音识别走 Google 服务器，国内网络可能报 network 错误 → 换 Edge（走 Azure）
-- Edge 在线音色需要联网；离线时回退到系统本地音色
-- Firefox / Safari 不支持 SpeechRecognition（按钮自动置灰提示，朗读仍可用）
-- 语音识别准确性取决于浏览器与系统麦克风，与插件无关
-- OpenAI Realtime 会产生 API 用量与费用，并要求 host 能访问 OpenAI API
-- 豆包 Duplex 3.0 需要在新版语音控制台开通实时语音资源，并配置 `DOUBAO_API_KEY`；仅注册模型不代表账号已开通
-
-## Roadmap（Phase 2）
-
-- 🎙 按住说话（Space 按住识别、松开发送，对标微信语音）
-- 🔊 edge-tts 高音质音色（XiaoxiaoNeural，Node 端生成 + 附件路由播放）
-- 📼 语音备忘：录音转文字存为会话草稿
-- 🧩 agent 可调用朗读工具（host 注册 read_aloud，模型可在回答时主动朗读）
-
-## English quick start
-
-**Talk to Text** uses a registered GPT Realtime model as a context-aware voice deliberation and drafting workspace, with browser SpeechRecognition as an append-only fallback and speechSynthesis for read-aloud.
-
-```bash
-dsh plugin --profile web add dsh-talk-to-text
-```
-
-Then open http://127.0.0.1:3080, click the 🎤 in the composer toolbar, allow mic permission, and speak. Click 🔊 on any assistant reply to hear it. Configure language / auto-read / voice / rate under Settings → Talk to Text.
-
-## License
-
-MIT © [FuzzySoul](https://github.com/FuzzySoul)
+当前拆分先保持已有可用体验；低成本唤醒/待机、宠物角色和个人知识接入将在此边界稳定后分别设计。

@@ -1,23 +1,24 @@
-// dsh-talk-to-text web client — DOM 注入 + browser/OpenAI Realtime 识别 + speechSynthesis。
-// Talk to Text: voice input + read-aloud for the DeepSeek Harness web GUI.
+// dsh-session-assistant web client — DOM 注入 + browser/OpenAI Realtime 识别 + speechSynthesis。
+// Session Assistant: voice input + read-aloud for the DeepSeek Harness web GUI.
 //
 // 模块格式沿用 dsh-free-vision 的已验证写法: window.__ModuleLoader__.load
 // 工厂 + exports { name, inject, apply }; 设置页通过 ctx.slots.inject
 // ('settings.section') 注册; 输入框麦克风与消息小喇叭用 MutationObserver
 // 注入（选择器尽量宽松, 依赖 data- 属性而不是易变的 CSS module 哈希类名）。
 //
-// 配置读取: GET /dsh-talk-to-text/config (host 路由, 持久化 ~/.dsh/talk-to-text.json)
-// 配置保存: POST /dsh-talk-to-text/config —— 保存即生效, 无需重启。
-window.__ModuleLoader__.load({ id: "dsh-talk-to-text", factory: (require) => {
+// 配置读取: GET /dsh-session-assistant/config (host 路由, 持久化 ~/.dsh/talk-to-text.json)
+// 配置保存: POST /dsh-session-assistant/config —— 保存即生效, 无需重启。
+window.__ModuleLoader__.load({ id: "dsh-session-assistant", factory: (require) => {
   var module = { exports: {} };
   var exports = module.exports;
   Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
   const react = require("react");
 
   const NS = "chatvoice";
-  const CONFIG_URL = "/dsh-talk-to-text/config";
-  const REALTIME_SESSION_URL = "/dsh-talk-to-text/realtime/session";
-  const DOUBAO_REALTIME_URL = "/dsh-talk-to-text/realtime/doubao";
+  const CONFIG_URL = "/dsh-session-assistant/config";
+  const REALTIME_SESSION_URL = "/dsh-realtime-voice/openai/session";
+  const DOUBAO_REALTIME_URL = "/dsh-realtime-voice/doubao";
+  const VOICE_PROFILE_ID = "session-assistant";
 
   /* ══════════════════════════ 共享状态 ══════════════════════════ */
 
@@ -413,7 +414,7 @@ window.__ModuleLoader__.load({ id: "dsh-talk-to-text", factory: (require) => {
   function voiceEditorInstructions(ta) {
     const context = transcriptionContext(ta);
     return [
-      "You are Talk to Text, a voice controller in front of the primary Agent. You cannot execute tasks, use the Agent's tools, edit files, browse, run commands, or claim that work was completed.",
+      "You are Session Assistant, a voice controller in front of the primary Agent. You cannot execute tasks, use the Agent's tools, edit files, browse, run commands, or claim that work was completed.",
       "Your only capabilities are discussing with the user, maintaining an editable draft, submitting an exact final draft to the primary Agent, and ending this voice session.",
       "The user may think aloud, ask a question, explore alternatives, dictate content, edit earlier text, ask you to finalize it, or tell you to submit it for execution.",
       "Hold a natural full-duplex voice conversation. Reply in audio, keep replies concise, and allow the user to interrupt you.",
@@ -470,7 +471,7 @@ window.__ModuleLoader__.load({ id: "dsh-talk-to-text", factory: (require) => {
   function setMicState(btn, state) {
     const on = state === "recording" || state === "starting";
     btn.classList.toggle("chatvoice-recording", on);
-    btn.title = on ? "共同思考中…再次点击停止" : "Talk to Text：点击开始讨论并维护草稿，再次点击停止";
+    btn.title = on ? "共同思考中…再次点击停止" : "Session Assistant：点击开始讨论并维护草稿，再次点击停止";
     btn.setAttribute("aria-label", btn.title);
   }
 
@@ -820,8 +821,13 @@ window.__ModuleLoader__.load({ id: "dsh-talk-to-text", factory: (require) => {
       await pc.setLocalDescription(offer);
       const response = await fetch(REALTIME_SESSION_URL, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "X-DSH-Talk-To-Text": "1" },
-        body: JSON.stringify({ sdp: offer.sdp, context: transcriptionContext(ta) }),
+        headers: { "Content-Type": "application/json", "X-DSH-Realtime-Voice": "1" },
+        body: JSON.stringify({
+          sdp: offer.sdp,
+          context: transcriptionContext(ta),
+          profileId: VOICE_PROFILE_ID,
+          routeId: cfg.openaiRealtimeModel,
+        }),
         signal: controller.abort.signal,
       });
       const answerSdp = await response.text();
@@ -1048,7 +1054,12 @@ window.__ModuleLoader__.load({ id: "dsh-talk-to-text", factory: (require) => {
       const protocol = location.protocol === "https:" ? "wss://" : "ws://";
       const ws = new WebSocket(protocol + location.host + DOUBAO_REALTIME_URL);
       controller.ws = ws;
-      ws.onopen = () => send({ type: "session.start", context: transcriptionContext(ta) });
+      ws.onopen = () => send({
+        type: "session.start",
+        context: transcriptionContext(ta),
+        profileId: VOICE_PROFILE_ID,
+        routeId: cfg.doubaoRealtimeModel,
+      });
       ws.onmessage = (event) => {
         if (session !== recognitionSession) return;
         let message;
@@ -1157,7 +1168,7 @@ window.__ModuleLoader__.load({ id: "dsh-talk-to-text", factory: (require) => {
       btn.disabled = !secure || !support.ok;
       btn.title = !secure
         ? "非安全上下文无法使用麦克风（请用 http://127.0.0.1:3080 访问）"
-        : (support.ok ? "Talk to Text：点击开始讨论并维护草稿，再次点击停止" : support.reason);
+        : (support.ok ? "Session Assistant：点击开始讨论并维护草稿，再次点击停止" : support.reason);
       btn.setAttribute("aria-label", btn.title);
     });
   }
@@ -1171,7 +1182,7 @@ window.__ModuleLoader__.load({ id: "dsh-talk-to-text", factory: (require) => {
     const support = recognitionSupport();
     if (!support.ok) { btn.disabled = true; btn.title = support.reason; }
     else if (!window.isSecureContext) { btn.disabled = true; btn.title = "非安全上下文无法使用麦克风（请用 http://127.0.0.1:3080 访问）"; }
-    else btn.title = "Talk to Text：点击开始讨论并维护草稿，再次点击停止";
+    else btn.title = "Session Assistant：点击开始讨论并维护草稿，再次点击停止";
     btn.setAttribute("aria-label", btn.title);
     btn.addEventListener("click", (ev) => { ev.preventDefault(); ev.stopPropagation(); toggleMic(ta, btn); });
     return btn;
@@ -1494,9 +1505,9 @@ window.__ModuleLoader__.load({ id: "dsh-talk-to-text", factory: (require) => {
     // 设置页分组（沿用 free-vision 已验证的 slots 注册写法）
     ctx.slots.inject("settings.section", () => ctx.slots.register({
       name: "settings.section",
-      id: "dsh-talk-to-text",
+      id: "dsh-session-assistant",
       order: 60,
-      label: () => "Talk to Text",
+      label: () => "Session Assistant",
       locale: NS,
       inject: () => ({})
     }, () => react.createElement(Section)));
@@ -1505,7 +1516,7 @@ window.__ModuleLoader__.load({ id: "dsh-talk-to-text", factory: (require) => {
     else boot();
   }
 
-  exports.name = "dsh-talk-to-text";
+  exports.name = "dsh-session-assistant";
   exports.inject = ["slots", "sessions"];
   exports.apply = apply;
   return module.exports;

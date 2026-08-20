@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "profileId": "session-assistant",
+  "runtime": "dsh-realtime-voice",
+  "tools": ["update_working_draft", "submit_to_agent", "end_voice_session"],
+  "executionBoundary": "primary-agent-only"
+}
