@@ -106,12 +106,12 @@ function sendJson(res, status, body) {
 
 export function apply(ctx, config = {}) {
   const getEffective = () => normalize(effectiveConfig(config))
-  ctx.inject(['webServer', 'realtimeVoice'], scope => {
-    const disposeProfile = scope.realtimeVoice.registerProfile(sessionProfile())
+  ctx.inject(['webServer', 'realtimeModelRuntime'], scope => {
+    const disposeProfile = scope.realtimeModelRuntime.registerProfile(sessionProfile())
     if (typeof scope.effect === 'function') scope.effect(() => disposeProfile, 'dsh-session-assistant.profile')
 
     const publicState = async () => {
-      const models = await scope.realtimeVoice.publicModels()
+      const models = await scope.realtimeModelRuntime.publicModels()
       const current = getEffective()
       const openai = selectModel(current, models, 'openai-webrtc')
       const doubao = selectModel(current, models, 'doubao-realtime-duplex')

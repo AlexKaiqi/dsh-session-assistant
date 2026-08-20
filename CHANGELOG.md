@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Session Assistant 改为只消费 `dsh-multi-model-provider/realtimeModelRuntime`；模型目录、凭据解析和 Profile runtime 不再由语音适配插件重复管理
+- 一次语音连接绑定启动时的 `focusedSessionId`；切换 Session 后拒绝修改或提交原会话草稿，避免静默改变目标
 - Realtime 角色收紧为主 Agent 前的语音控制器：只能讨论、维护草稿、提交和结束会话，不得声称执行文件、命令或浏览器任务
 - 新增 `submit_to_agent` 与 `end_voice_session` 原子工具；“提交 / 让 Agent 执行 / 结束语音”等指令可全程通过语音完成
 - 移除双工工作区中的“整理 / 提交 / 结束”按钮，只保留必要状态与回复转写；整理继续由 `update_working_draft` 的 `ready` 状态完成

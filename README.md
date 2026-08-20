@@ -6,9 +6,9 @@
 
 ## 边界
 
-- `dsh-session-assistant`：当前 Session 的上下文投影、角色、三项语音操作和页面 UI。
-- `dsh-realtime-voice`：注册模型发现、凭据解析、OpenAI WebRTC、豆包 WebSocket 和 Provider 会话装配。
-- `dsh-personal-knowledge-base`：长期知识及当前 focus；尚未作为本插件的硬依赖。
+- `dsh-session-assistant`：绑定启动时聚焦的 Session，负责上下文投影、角色、三项语音操作和页面 UI。
+- `dsh-multi-model-provider`：Realtime 模型目录、选择、凭据解析、Profile runtime 和 adapter contract。
+- `dsh-realtime-voice`：可选的 GPT Realtime／豆包 Duplex adapter 与浏览器音频传输实现。
 
 语音模型只得到以下能力：
 
@@ -20,7 +20,9 @@
 
 ## 运行依赖
 
-先安装 `dsh-realtime-voice`，再安装本插件。Realtime 模型及凭据继续在 DSH 模型注册中配置；本插件的设置页只选择已注册的可用路由。
+本插件只依赖 `dsh-multi-model-provider` 的统一 runtime。使用 GPT Realtime 或豆包 Duplex 时另装 `dsh-realtime-voice` adapter；浏览器原生听写不需要它。Realtime 模型及凭据统一在 DSH 模型注册中配置，本插件只选择可用路由。
+
+一次语音连接绑定启动时的 `focusedSessionId`。切换 Session 不会悄悄改变草稿或提交目标；切回原 Session 后才允许继续修改或提交。
 
 浏览器兜底听写与主 Agent 回复朗读仍保留。Session 配置保存在 `~/.dsh/session-assistant.json`，首次运行会读取旧的 `talk-to-text.json` 作为迁移来源。
 
@@ -31,4 +33,4 @@ pnpm test
 pnpm check
 ```
 
-当前拆分先保持已有可用体验；低成本唤醒/待机、宠物角色和个人知识接入将在此边界稳定后分别设计。
+个人知识库不是核心依赖；跨 Session 的长期记忆可在未来作为可选只读增强。

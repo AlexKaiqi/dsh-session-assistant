@@ -52,7 +52,7 @@
       },
       "tags": ["voice", "realtime", "drafting", "productivity"],
       "dependencies": [
-        "dsh-realtime-voice"
+        "dsh-multi-model-provider"
       ]
     },
     "bundle": {

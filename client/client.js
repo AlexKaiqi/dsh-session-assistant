@@ -159,7 +159,23 @@ window.__ModuleLoader__.load({ id: "dsh-session-assistant", factory: (require) =
     voiceWorkspacePanel = null;
   }
 
+  function currentFocusedSessionId() {
+    try {
+      const list = clientCtx && clientCtx.sessions && clientCtx.sessions.list && clientCtx.sessions.list.getSnapshot();
+      return list && list.current ? String(list.current) : "";
+    } catch { return ""; }
+  }
+
+  function voiceSessionStillFocused(controller) {
+    const bound = controller && controller.focusedSessionId;
+    return !bound || currentFocusedSessionId() === bound;
+  }
+
   function submitVoiceDraft(ta, controller, attempt = 0) {
+    if (!voiceSessionStillFocused(controller)) {
+      toast("当前焦点已经切换到另一个会话；请切回原会话后再提交语音草稿", 6000);
+      return;
+    }
     const draft = String((ta && ta.value) || "").trim();
     if (!draft) { toast("工作草稿还是空的，先说出你的想法"); return; }
     if (attempt === 0) {
@@ -372,7 +388,7 @@ window.__ModuleLoader__.load({ id: "dsh-session-assistant", factory: (require) =
   }
 
   /** Build bounded context for the voice thinking/drafting partner, not a duplicate Agent conversation. */
-  function transcriptionContext(ta) {
+  function transcriptionContext(ta, focusedSessionId) {
     const mode = cfg.openaiContextMode || "recent";
     if (mode === "off") return "";
     const lines = [
@@ -385,7 +401,7 @@ window.__ModuleLoader__.load({ id: "dsh-session-assistant", factory: (require) =
     try {
       const sessions = clientCtx && clientCtx.sessions;
       const list = sessions && sessions.list && sessions.list.getSnapshot();
-      const sessionId = list && list.current;
+      const sessionId = focusedSessionId || (list && list.current);
       const row = sessionId && list.byId && list.byId[sessionId];
       if (row && row.cwd) lines.push("Workspace: " + clipped(String(row.cwd).split(/[\\/]/).filter(Boolean).pop(), 160));
       const binding = sessionId && sessions.binding(sessionId);
@@ -411,8 +427,8 @@ window.__ModuleLoader__.load({ id: "dsh-session-assistant", factory: (require) =
     return lines.join("\n\n").slice(0, 3_800);
   }
 
-  function voiceEditorInstructions(ta) {
-    const context = transcriptionContext(ta);
+  function voiceEditorInstructions(ta, focusedSessionId) {
+    const context = transcriptionContext(ta, focusedSessionId);
     return [
       "You are Session Assistant, a voice controller in front of the primary Agent. You cannot execute tasks, use the Agent's tools, edit files, browse, run commands, or claim that work was completed.",
       "Your only capabilities are discussing with the user, maintaining an editable draft, submitting an exact final draft to the primary Agent, and ending this voice session.",
@@ -555,8 +571,10 @@ window.__ModuleLoader__.load({ id: "dsh-session-assistant", factory: (require) =
 
   async function startOpenAIRealtime(ta, btn) {
     const session = ++recognitionSession;
+    const focusedSessionId = currentFocusedSessionId();
     const controller = {
       kind: "openai-realtime",
+      focusedSessionId,
       button: btn,
       pc: null,
       dc: null,
@@ -663,6 +681,13 @@ window.__ModuleLoader__.load({ id: "dsh-session-assistant", factory: (require) =
         }, 80);
         return true;
       }
+      if (!voiceSessionStillFocused(controller)) {
+        const result = { ok: false, error: "The focused session changed. Return to the session where this voice connection started before editing or submitting its draft." };
+        controller.busy = true;
+        toast("焦点已切换；语音草稿仍绑定原会话，没有修改当前会话", 6000);
+        try { returnToolResult(call, result); } catch { controller.busy = false; }
+        return true;
+      }
       const draft = typeof args.draft === "string" ? args.draft : turnBaseline;
       const summary = (typeof args.summary === "string" && args.summary.trim()) || "已更新工作草稿";
       const submitting = call.name === "submit_to_agent";
@@ -748,7 +773,7 @@ window.__ModuleLoader__.load({ id: "dsh-session-assistant", factory: (require) =
           try {
             dc.send(JSON.stringify({
               type: "session.update",
-              session: { type: "realtime", instructions: voiceEditorInstructions(ta) },
+              session: { type: "realtime", instructions: voiceEditorInstructions(ta, controller.focusedSessionId) },
             }));
           } catch { /* the server-owned initial instructions remain available */ }
           renderVoiceWorkspace(controller, { phase: "listening", connected: true, busy: false });
@@ -824,7 +849,7 @@ window.__ModuleLoader__.load({ id: "dsh-session-assistant", factory: (require) =
         headers: { "Content-Type": "application/json", "X-DSH-Realtime-Voice": "1" },
         body: JSON.stringify({
           sdp: offer.sdp,
-          context: transcriptionContext(ta),
+          context: transcriptionContext(ta, controller.focusedSessionId),
           profileId: VOICE_PROFILE_ID,
           routeId: cfg.openaiRealtimeModel,
         }),
@@ -880,6 +905,7 @@ window.__ModuleLoader__.load({ id: "dsh-session-assistant", factory: (require) =
 
   async function startDoubaoRealtime(ta, btn) {
     const session = ++recognitionSession;
+    const focusedSessionId = currentFocusedSessionId();
     let turnBaseline = ta && ta.value !== undefined ? ta.value : "";
     let lastAppliedDraft = turnBaseline;
     const appliedCalls = new Set();
@@ -887,6 +913,7 @@ window.__ModuleLoader__.load({ id: "dsh-session-assistant", factory: (require) =
     let inputTranscript = "";
     const controller = {
       kind: "doubao-realtime",
+      focusedSessionId,
       button: btn,
       ws: null,
       stream: null,
@@ -934,7 +961,7 @@ window.__ModuleLoader__.load({ id: "dsh-session-assistant", factory: (require) =
     }
 
     function syncContext() {
-      send({ type: "context.update", context: transcriptionContext(ta) });
+      send({ type: "context.update", context: transcriptionContext(ta, controller.focusedSessionId) });
     }
 
     function applyVoiceTool(call) {
@@ -955,6 +982,12 @@ window.__ModuleLoader__.load({ id: "dsh-session-assistant", factory: (require) =
           if (recognition === controller) stopRecognition(ta, btn);
           closeVoiceWorkspacePanel();
         }, 80);
+        return true;
+      }
+      if (!voiceSessionStillFocused(controller)) {
+        appliedCalls.add(call.call_id);
+        send({ type: "tool.result", call_id: call.call_id, output: JSON.stringify({ ok: false, error: "The focused session changed. Return to the session where this voice connection started before editing or submitting its draft." }) });
+        toast("焦点已切换；语音草稿仍绑定原会话，没有修改当前会话", 6000);
         return true;
       }
       const next = typeof args.draft === "string" ? args.draft.trim() : turnBaseline;
@@ -1056,7 +1089,7 @@ window.__ModuleLoader__.load({ id: "dsh-session-assistant", factory: (require) =
       controller.ws = ws;
       ws.onopen = () => send({
         type: "session.start",
-        context: transcriptionContext(ta),
+        context: transcriptionContext(ta, controller.focusedSessionId),
         profileId: VOICE_PROFILE_ID,
         routeId: cfg.doubaoRealtimeModel,
       });

@@ -45,11 +45,11 @@ test('normalizes persisted UI settings and excludes runtime-only state', () => {
   assert.equal('realtimeModels' in value, false)
 })
 
-test('registers one role profile and one settings route against the voice runtime', () => {
+test('registers one role profile and one settings route against the multi-model runtime', () => {
   const routes = []
   let registeredProfile
   const scope = {
-    realtimeVoice: {
+    realtimeModelRuntime: {
       registerProfile(profile) { registeredProfile = profile; return () => {} },
       async publicModels() {
         return [
@@ -61,7 +61,7 @@ test('registers one role profile and one settings route against the voice runtim
     webServer: { register(route) { routes.push(route) } },
     effect(callback) { callback() },
   }
-  apply({ inject(names, callback) { assert.deepEqual(names, ['webServer', 'realtimeVoice']); callback(scope) } }, {})
+  apply({ inject(names, callback) { assert.deepEqual(names, ['webServer', 'realtimeModelRuntime']); callback(scope) } }, {})
   assert.equal(registeredProfile.id, 'session-assistant')
   assert.deepEqual(routes.map(route => route.path), ['/dsh-session-assistant/config'])
 })
@@ -72,5 +72,8 @@ test('web client sends profile and registered route to the shared runtime', asyn
   assert.match(source, /\/dsh-realtime-voice\/doubao/)
   assert.match(source, /profileId: VOICE_PROFILE_ID/)
   assert.match(source, /routeId: cfg\.doubaoRealtimeModel/)
+  assert.match(source, /focusedSessionId = currentFocusedSessionId\(\)/)
+  assert.match(source, /voiceSessionStillFocused\(controller\)/)
+  assert.match(source, /语音草稿仍绑定原会话/)
   assert.doesNotMatch(source, /\/dsh-session-assistant\/realtime\/session/)
 })
