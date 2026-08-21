@@ -58,7 +58,8 @@ test('Host registration source uses live settings, narrow Remote, profiles, and 
   assert.match(source, /registerProfile\(profile\)/)
   assert.match(source, /ctx\.effect\(/)
   assert.match(settings, /applies: 'live'/)
-  assert.equal(mod.sessionProfiles().length, mod.OPENAI_REALTIME_VOICES.length + 1)
+  assert.equal(mod.sessionProfiles().length, (mod.OPENAI_REALTIME_VOICES.length + 1) * 2)
+  assert.equal(mod.sessionProfiles().filter(profile => profile.id.includes('preview')).every(profile => profile.tools.length === 0), true)
   assert.doesNotMatch(source, /webServer|register\(\{\s*kind: 'exact'|writeFile/)
 })
 
@@ -82,4 +83,23 @@ test('settings Remote saves a closed normalized schema with expected revision', 
   assert.equal('unknown' in calls[0][1], false)
   assert.equal(calls[0][2], 7)
   assert.equal(view.revision, 7)
+})
+
+test('settings Remote projects optional Personal Knowledge with bounded inputs and honest absence', async () => {
+  const calls = []
+  const Remote = mod.SessionAssistantSettingsRemote
+  const remote = Object.create(Remote.prototype)
+  remote.ctx = {
+    get(name) {
+      if (name !== 'personalKnowledge') return undefined
+      return { project(options) { calls.push(options); return { text: '# projection', sources: ['USER.md'] } } }
+    },
+  }
+  const projected = await remote.context({ query: 'q'.repeat(3_000), sessionId: 's', cwd: '/workspace', maxChars: 99_999 })
+  assert.deepEqual(projected, { available: true, text: '# projection', sources: ['USER.md'] })
+  assert.equal(calls[0].query.length, 2_400)
+  assert.equal(calls[0].maxChars, 12_000)
+
+  remote.ctx = { get() { return undefined } }
+  assert.deepEqual(await remote.context({}), { available: false, text: '', sources: [] })
 })

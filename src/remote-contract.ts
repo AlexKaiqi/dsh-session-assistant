@@ -19,6 +19,12 @@ const viewSchema = z.object({
   settings: settingsSchema,
 }).strict()
 
+const contextViewSchema = z.object({
+  available: z.boolean(),
+  text: z.string(),
+  sources: z.array(z.string()),
+}).strict()
+
 export function sessionAssistantRemoteDescriptors() {
   return [
     {
@@ -38,6 +44,17 @@ export function sessionAssistantRemoteDescriptors() {
       }],
       result: { mode: 'strict' as const, typeSymbol: 'dsh-session-assistant#SessionAssistantSettingsView', schema: viewSchema },
       sourceLocation: { file: 'src/settings-remote.ts', line: 41, column: 3 },
+    },
+    {
+      id: 'dsh-session-assistant#sessionAssistantSettings/context',
+      service: 'sessionAssistantSettings', namespace: 'sessionAssistantSettings', method: 'context',
+      invocation: { kind: 'direct' as const },
+      parameters: [{
+        name: 'request', wire: 'request' as const, source: 'json' as const,
+        codec: { mode: 'strict' as const, typeSymbol: 'dsh-session-assistant#SessionAssistantContextRequest', schema: z.object({ query: z.string().optional(), sessionId: z.string().optional(), cwd: z.string().optional(), maxChars: z.number().optional() }).strict() },
+      }],
+      result: { mode: 'strict' as const, typeSymbol: 'dsh-session-assistant#SessionAssistantContextView', schema: contextViewSchema },
+      sourceLocation: { file: 'src/settings-remote.ts', line: 47, column: 3 },
     },
   ]
 }

@@ -19,6 +19,13 @@ export function realtimeEditorInstructions(context = ''): string {
   return [PROMPT, context ? `Current projected session context and editable draft:\n${context}` : 'The editable draft is initially empty.'].join('\n\n')
 }
 
+export function realtimePreviewInstructions(sample = ''): string {
+  return [
+    'You are a voice preview. Speak exactly one short sample sentence, then stop. Do not ask questions, call tools, mention settings, or continue the conversation.',
+    sample ? `Exact sample sentence:\n${sample}` : 'Say a brief friendly greeting.',
+  ].join('\n\n')
+}
+
 export function openAIProfileId(voice: string): string {
   const selected = OPENAI_REALTIME_VOICES.some(candidate => candidate.id === voice) ? voice : 'marin'
   return `session-assistant-openai-${selected}`
@@ -28,13 +35,24 @@ export function sessionProfile({ id = 'session-assistant', openaiVoice }: { id?:
   return { id, instructions: realtimeEditorInstructions, tools: SESSION_ASSISTANT_TOOLS, voice: openaiVoice ? { openai: openaiVoice } : {} }
 }
 
+export function previewProfile({ id = 'session-assistant-preview', openaiVoice }: { id?: string; openaiVoice?: string } = {}) {
+  return { id, instructions: realtimePreviewInstructions, tools: [], voice: openaiVoice ? { openai: openaiVoice } : {} }
+}
+
 export function sessionProfiles() {
-  return [sessionProfile(), ...OPENAI_REALTIME_VOICES.map(voice => sessionProfile({ id: openAIProfileId(voice.id), openaiVoice: voice.id }))]
+  return [
+    sessionProfile(),
+    previewProfile(),
+    ...OPENAI_REALTIME_VOICES.flatMap(voice => [
+      sessionProfile({ id: openAIProfileId(voice.id), openaiVoice: voice.id }),
+      previewProfile({ id: `session-assistant-preview-openai-${voice.id}`, openaiVoice: voice.id }),
+    ]),
+  ]
 }
 
 interface RuntimeContext extends Context {
   settings: SettingsProvider
-  realtimeModelRuntime: { registerProfile(profile: ReturnType<typeof sessionProfile>): () => void }
+  realtimeModelRuntime: { registerProfile(profile: ReturnType<typeof sessionProfile> | ReturnType<typeof previewProfile>): () => void }
 }
 
 export function apply(ctx: RuntimeContext, config: Partial<SessionAssistantSettings> = {}): void {

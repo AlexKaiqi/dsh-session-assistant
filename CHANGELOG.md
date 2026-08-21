@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- 设置页新增两条语音播放试听：receive-only Realtime 会话播放实际所选助手模型/音色且不申请麦克风权限；浏览器朗读试听使用当前未保存的语言、音色和语速；两者均支持停止、完成与错误反馈
+- Client UI 接入宿主 locale namespace，设置页、语音控件、会话状态与朗读操作统一支持中英文；中文设置分组名改为“会话助手”
+- 新增宠物组合协议：当前 Session 响应 `dsh-pet-assistant:activate`，并只投影公开 lifecycle/transcript 状态；宠物入口与输入栏共用同一 VoiceController
+- Realtime 建连与草稿 context.update 可选合并 `dsh-personal-knowledge-base` 的有界投影；知识库缺失或不可用时保持原链路
+
 - Host 配置迁移到 DSH Settings `session-assistant` 命名空间，实时应用 composition base；旧 JSON 仅作一次性导入源且不再写回
 - 新增插件自有严格 Typert Remote，设置保存带 revision 防冲突；移除自定义 HTTP 配置协议
 - Client 重写为四个 Slot 组件，只消费 `realtimeVoice` 标准事件和 Session `inputActions`

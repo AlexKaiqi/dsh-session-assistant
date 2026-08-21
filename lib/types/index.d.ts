@@ -12,6 +12,7 @@ export { buildBoundedContext } from './client/context.ts';
 export declare const name = "dsh-session-assistant";
 export declare const inject: string[];
 export declare function realtimeEditorInstructions(context?: string): string;
+export declare function realtimePreviewInstructions(sample?: string): string;
 export declare function openAIProfileId(voice: string): string;
 export declare function sessionProfile({ id, openaiVoice }?: {
     id?: string;
@@ -30,6 +31,19 @@ export declare function sessionProfile({ id, openaiVoice }?: {
             properties: {};
         };
     }[];
+    voice: {
+        openai: string;
+    } | {
+        openai?: never;
+    };
+};
+export declare function previewProfile({ id, openaiVoice }?: {
+    id?: string;
+    openaiVoice?: string;
+}): {
+    id: string;
+    instructions: typeof realtimePreviewInstructions;
+    tools: never[];
     voice: {
         openai: string;
     } | {
@@ -59,7 +73,7 @@ export declare function sessionProfiles(): {
 interface RuntimeContext extends Context {
     settings: SettingsProvider;
     realtimeModelRuntime: {
-        registerProfile(profile: ReturnType<typeof sessionProfile>): () => void;
+        registerProfile(profile: ReturnType<typeof sessionProfile> | ReturnType<typeof previewProfile>): () => void;
     };
 }
 export declare function apply(ctx: RuntimeContext, config?: Partial<SessionAssistantSettings>): void;

@@ -10,6 +10,7 @@ export const TYPERT = {
       members: [
         { kind: 'method', name: 'describe', signature: "@Remote('describe') describe(): Promise<SessionAssistantSettingsView>", summary: 'Read settings.' },
         { kind: 'method', name: 'save', signature: "@Remote('save') save(request: SaveSessionAssistantSettingsRequest): Promise<SessionAssistantSettingsView>", summary: 'Save settings with revision fencing.' },
+        { kind: 'method', name: 'context', signature: "@Remote('context') context(request: SessionAssistantContextRequest): Promise<SessionAssistantContextView>", summary: 'Project optional personal knowledge into the current assistant session.' },
       ], types: [],
     }], events: [], objects: [],
   },

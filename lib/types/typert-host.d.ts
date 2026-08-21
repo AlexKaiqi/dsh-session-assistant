@@ -2,7 +2,7 @@ export declare const TYPERT: {
     package: string;
     face: string;
     schemas: never[];
-    invocations: {
+    invocations: ({
         id: string;
         service: string;
         namespace: string;
@@ -87,7 +87,44 @@ export declare const TYPERT: {
             line: number;
             column: number;
         };
-    }[];
+    } | {
+        id: string;
+        service: string;
+        namespace: string;
+        method: string;
+        invocation: {
+            kind: "direct";
+        };
+        parameters: {
+            name: string;
+            wire: "request";
+            source: "json";
+            codec: {
+                mode: "strict";
+                typeSymbol: string;
+                schema: import("zod").ZodObject<{
+                    query: import("zod").ZodOptional<import("zod").ZodString>;
+                    sessionId: import("zod").ZodOptional<import("zod").ZodString>;
+                    cwd: import("zod").ZodOptional<import("zod").ZodString>;
+                    maxChars: import("zod").ZodOptional<import("zod").ZodNumber>;
+                }, import("zod/v4/core").$strict>;
+            };
+        }[];
+        result: {
+            mode: "strict";
+            typeSymbol: string;
+            schema: import("zod").ZodObject<{
+                available: import("zod").ZodBoolean;
+                text: import("zod").ZodString;
+                sources: import("zod").ZodArray<import("zod").ZodString>;
+            }, import("zod/v4/core").$strict>;
+        };
+        sourceLocation: {
+            file: string;
+            line: number;
+            column: number;
+        };
+    })[];
     model: {
         services: {
             description: string;

@@ -32,7 +32,7 @@ export interface ControllerDependencies {
   readonly sessionId: string
   readonly inputActions: InputActionsLike
   readonly getInput: () => InputStateLike
-  readonly context: (draft?: string) => string
+  readonly context: (draft?: string) => string | Promise<string>
   readonly open: () => Promise<VoiceSessionHandle> | VoiceSessionHandle
   readonly dictation?: boolean | (() => boolean)
 }
@@ -172,7 +172,7 @@ export class VoiceController {
     this.lastApplied = draft
     const draftStatus = event.name === 'submit_to_agent' || args.status === 'ready' ? 'ready' : 'drafting'
     this.publish({ draftStatus, phase: 'editing' })
-    await this.handle.updateContext(this.deps.context(draft))
+    await this.handle.updateContext(await this.deps.context(draft))
     await this.handle.resolveTool(event.callId, { ok: true, draft, status: draftStatus })
     if (event.name === 'submit_to_agent' && !this.disposed) this.deps.inputActions.submit()
   }
@@ -192,5 +192,31 @@ export function providerOpenOptions(settings: SessionAssistantSettings, context:
     profileId: openai ? `session-assistant-openai-${settings.openaiRealtimeVoice}` : 'session-assistant',
     context,
     language: settings.recognitionLang,
+  }
+}
+
+/** Build the browser read-aloud sample from the unsaved Settings draft. */
+export function readAloudPreviewOptions(settings: SessionAssistantSettings) {
+  return {
+    text: settings.recognitionLang === 'zh-CN'
+      ? '你好，我是你的语音助手。这样的声音和语速合适吗？'
+      : 'Hello, I am your voice assistant. Does this voice and speed sound right?',
+    ...(settings.voiceName ? { voiceName: settings.voiceName } : {}),
+    lang: settings.recognitionLang,
+    rate: settings.rate,
+  }
+}
+
+/** Open one receive-only Provider response using the actual selected Realtime voice. */
+export function realtimeVoicePreviewOptions(settings: SessionAssistantSettings) {
+  const openai = settings.recognitionProvider === 'openai-realtime'
+  const previewText = readAloudPreviewOptions(settings).text
+  return {
+    protocol: openai ? 'openai-webrtc' : 'doubao-realtime-duplex',
+    routeId: openai ? settings.openaiRealtimeModel : settings.doubaoRealtimeModel,
+    profileId: openai ? `session-assistant-preview-openai-${settings.openaiRealtimeVoice}` : 'session-assistant-preview',
+    context: previewText,
+    outputOnly: true,
+    previewText,
   }
 }

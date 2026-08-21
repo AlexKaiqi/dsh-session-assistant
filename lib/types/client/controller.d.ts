@@ -56,7 +56,7 @@ export interface ControllerDependencies {
     readonly sessionId: string;
     readonly inputActions: InputActionsLike;
     readonly getInput: () => InputStateLike;
-    readonly context: (draft?: string) => string;
+    readonly context: (draft?: string) => string | Promise<string>;
     readonly open: () => Promise<VoiceSessionHandle> | VoiceSessionHandle;
     readonly dictation?: boolean | (() => boolean);
 }
@@ -89,5 +89,21 @@ export declare function providerOpenOptions(settings: SessionAssistantSettings, 
     profileId: string;
     context: string;
     language: import("../settings-values.ts").RecognitionLanguage;
+};
+/** Build the browser read-aloud sample from the unsaved Settings draft. */
+export declare function readAloudPreviewOptions(settings: SessionAssistantSettings): {
+    lang: import("../settings-values.ts").RecognitionLanguage;
+    rate: number;
+    voiceName?: string;
+    text: string;
+};
+/** Open one receive-only Provider response using the actual selected Realtime voice. */
+export declare function realtimeVoicePreviewOptions(settings: SessionAssistantSettings): {
+    protocol: string;
+    routeId: string;
+    profileId: string;
+    context: string;
+    outputOnly: boolean;
+    previewText: string;
 };
 //# sourceMappingURL=controller.d.ts.map

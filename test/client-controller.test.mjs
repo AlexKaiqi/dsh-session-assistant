@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { VoiceController, providerOpenOptions } from '../lib/controller.js'
+import { VoiceController, providerOpenOptions, readAloudPreviewOptions, realtimeVoicePreviewOptions } from '../lib/controller.js'
 import { buildBoundedContext } from '../lib/index.js'
 
 function harness(initial = 'base') {
@@ -65,4 +65,24 @@ test('provider selection is data-only and bounded context excludes hidden/runnin
   assert.match(context, /visible context/)
   assert.doesNotMatch(context, /secret|thinking/)
   assert.ok(context.length <= 3800)
+})
+
+test('read-aloud preview uses the unsaved language, voice, and speed settings', () => {
+  const base = { recognitionProvider: 'browser', recognitionLang: 'zh-CN', openaiRealtimeModel: '', openaiRealtimeVoice: 'marin', doubaoRealtimeModel: '', openaiContextMode: 'recent', autoSpeak: false, autoSpeakMode: 'final', voiceName: 'Voice A', rate: 1.3 }
+  assert.deepEqual(readAloudPreviewOptions(base), {
+    text: '你好，我是你的语音助手。这样的声音和语速合适吗？', voiceName: 'Voice A', lang: 'zh-CN', rate: 1.3,
+  })
+  assert.deepEqual(readAloudPreviewOptions({ ...base, recognitionLang: 'en-US', voiceName: '' }), {
+    text: 'Hello, I am your voice assistant. Does this voice and speed sound right?', lang: 'en-US', rate: 1.3,
+  })
+  assert.deepEqual(realtimeVoicePreviewOptions({ ...base, recognitionProvider: 'doubao-realtime', doubaoRealtimeModel: 'doubao/voice-a' }), {
+    protocol: 'doubao-realtime-duplex', routeId: 'doubao/voice-a', profileId: 'session-assistant-preview',
+    context: '你好，我是你的语音助手。这样的声音和语速合适吗？', outputOnly: true,
+    previewText: '你好，我是你的语音助手。这样的声音和语速合适吗？',
+  })
+  assert.deepEqual(realtimeVoicePreviewOptions({ ...base, recognitionProvider: 'openai-realtime', openaiRealtimeModel: 'openai/gpt-realtime', openaiRealtimeVoice: 'cedar' }), {
+    protocol: 'openai-webrtc', routeId: 'openai/gpt-realtime', profileId: 'session-assistant-preview-openai-cedar',
+    context: '你好，我是你的语音助手。这样的声音和语速合适吗？', outputOnly: true,
+    previewText: '你好，我是你的语音助手。这样的声音和语速合适吗？',
+  })
 })
