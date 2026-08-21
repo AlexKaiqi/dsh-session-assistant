@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DSH pet assistant product evaluation run",
+  "type": "object",
+  "required": ["suiteId", "suiteVersion", "executedAt", "environment", "results"],
+  "properties": {
+    "suiteId": { "type": "string" },
+    "suiteVersion": { "type": "string" },
+    "executedAt": { "type": "string", "format": "date-time" },
+    "environment": { "type": "object" },
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["caseId", "status", "observedLevel", "evidence"],
+        "properties": {
+          "caseId": { "type": "string", "pattern": "^(PET|AST|INT|VOI|E2E|SEC|OPS)-[0-9]{3}$" },
+          "status": { "enum": ["passed", "failed", "blocked", "not-run"] },
+          "observedLevel": { "enum": ["none", "L1", "L2", "L3", "L4"] },
+          "evidence": { "type": "string", "minLength": 1 },
+          "artifacts": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    }
+  }
+}

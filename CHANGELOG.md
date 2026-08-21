@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- 设置页改为 Provider 能力驱动：浏览器、OpenAI Realtime、豆包 Duplex 只显示各自支持的字段；GPT 提供官方内置音色下拉，豆包直接选择已启用的音色路由
+- 浏览器回复朗读从实时语音 Provider 中拆出独立分组，音色由 `speechSynthesis.getVoices()` 动态枚举，不再要求手填名称
+- 修复 Session Profile 固定 `vivi` 覆盖豆包已选音色的问题；OpenAI 每个受支持音色使用独立 Profile，确保建连前选择真实生效
+- 新增跨宠物、文本助手、主 Agent 与 Realtime Voice 的 26 项验收目录和首轮缺口基线；明确文本链路先于语音接宠物
+- 客户端 DOM observer、轮询、媒体连接、全局监听器和注入节点纳入 `ctx.effect` 生命周期，插件重载/卸载时统一释放
 - Session Assistant 改为只消费 `dsh-multi-model-provider/realtimeModelRuntime`；模型目录、凭据解析和 Profile runtime 不再由语音适配插件重复管理
 - 一次语音连接绑定启动时的 `focusedSessionId`；切换 Session 后拒绝修改或提交原会话草稿，避免静默改变目标
 - Realtime 角色收紧为主 Agent 前的语音控制器：只能讨论、维护草稿、提交和结束会话，不得声称执行文件、命令或浏览器任务

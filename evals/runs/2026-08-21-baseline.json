@@ -1,0 +1,38 @@
+{
+  "suiteId": "dsh-pet-session-assistant-product",
+  "suiteVersion": "1.0.0",
+  "executedAt": "2026-08-21T12:00:00+08:00",
+  "environment": {
+    "kind": "source-audit-and-local-tests",
+    "petCommit": "1357284",
+    "note": "未把源代码存在视为 GUI 或真实 Provider 已通过。"
+  },
+  "results": [
+    { "caseId": "PET-001", "status": "not-run", "observedLevel": "L1", "evidence": "代码和既有资产测试存在；本轮未在真实 DSH GUI 完成导入、损坏资产和离线重启。" },
+    { "caseId": "PET-002", "status": "not-run", "observedLevel": "L1", "evidence": "发现 Agent 状态映射代码；尚无本轮 L3 Session 焦点与四状态证据。" },
+    { "caseId": "PET-003", "status": "passed", "observedLevel": "L1", "evidence": "PetBehavior runtime 已覆盖 assistant.activated/thinking/responding/drafting/ready/submitted/error；纯函数回归验证确定性映射、幂等、错误优先级及拒绝 render.frame。" },
+    { "caseId": "PET-004", "status": "not-run", "observedLevel": "L1", "evidence": "有交互和 fallback 实现线索；未完成缺动作皮肤和卸载资源的 L3 回归。" },
+    { "caseId": "AST-001", "status": "failed", "observedLevel": "L1", "evidence": "Session Assistant 当前只有语音/浏览器听写 UI，没有文本助手对话入口。" },
+    { "caseId": "AST-002", "status": "failed", "observedLevel": "L1", "evidence": "当前只投影草稿、工作区名和最近 6 条可见消息；没有能力声明 UI，也没有文件/git/终端投影。" },
+    { "caseId": "AST-003", "status": "not-run", "observedLevel": "L1", "evidence": "Prompt 和 update_working_draft 工具边界存在；尚未以真实模型验证讨论不会误改草稿。" },
+    { "caseId": "AST-004", "status": "not-run", "observedLevel": "L1", "evidence": "submit_to_agent 契约和焦点保护存在；尚无 L3 含糊确认与只提交一次证据。" },
+    { "caseId": "AST-005", "status": "failed", "observedLevel": "L1", "evidence": "现有工具白名单没有 create_session；客户端只在启动时绑定 focusedSessionId。" },
+    { "caseId": "AST-006", "status": "failed", "observedLevel": "L1", "evidence": "当前白名单正确限制为改稿、提交和结束，但缺少需求内的受控新建会话，因此全用例未通过。" },
+    { "caseId": "INT-001", "status": "failed", "observedLevel": "L1", "evidence": "宠物双击只广播 dsh-pet-assistant:activate；仓库中没有 Session Assistant 消费者或服务发现协议。" },
+    { "caseId": "INT-002", "status": "failed", "observedLevel": "L1", "evidence": "宠物与 Session Assistant 之间没有状态订阅、气泡或 transcript bridge。" },
+    { "caseId": "INT-003", "status": "failed", "observedLevel": "L1", "evidence": "当前助手以 voice 为唯一模型对话入口，无法证明无 Voice 时完整可用。" },
+    { "caseId": "VOI-001", "status": "passed", "observedLevel": "L2", "evidence": "assembly/service 单元集成验证 OpenAI 与豆包装配由 runtime 路由和 Session Assistant Profile 提供；公开配置不持久化 runtimeModels。" },
+    { "caseId": "VOI-002", "status": "blocked", "observedLevel": "none", "evidence": "需要真实 Provider、麦克风和扬声器执行 L4 双工与插话测试。" },
+    { "caseId": "VOI-003", "status": "passed", "observedLevel": "L2", "evidence": "本地 HTTP/WebSocket integration 通过：音频 append、context.update 保留服务端 Profile、工具结果、response.cancel、同源拒绝和连接清理均有真实 transport 证据。" },
+    { "caseId": "E2E-001", "status": "failed", "observedLevel": "L1", "evidence": "宠物文本助手入口和气泡桥接尚未实现。" },
+    { "caseId": "E2E-002", "status": "failed", "observedLevel": "L1", "evidence": "助手尚不能新建会话，宠物也未接助手。" },
+    { "caseId": "E2E-003", "status": "failed", "observedLevel": "L1", "evidence": "提交工具存在，但从宠物讨论到主 Agent 执行的完整链路不存在。" },
+    { "caseId": "E2E-004", "status": "blocked", "observedLevel": "none", "evidence": "依赖尚未通过的文本 E2E 和真实 Realtime Provider。" },
+    { "caseId": "E2E-005", "status": "not-run", "observedLevel": "L1", "evidence": "源码含 focusedSessionId 防串写检查；未在双 Workspace GUI 和模型断线场景验证恢复。" },
+    { "caseId": "SEC-001", "status": "failed", "observedLevel": "L1", "evidence": "Prompt 要求显式提交，但没有真实模型注入/误转写回归；新建会话授权规则尚未实现。" },
+    { "caseId": "SEC-002", "status": "not-run", "observedLevel": "L1", "evidence": "配置归一化避免 runtimeModels 持久化；未完成跨上下文、错误日志和宠物气泡的注入测试。" },
+    { "caseId": "SEC-003", "status": "failed", "observedLevel": "L1", "evidence": "宠物尚未区分 assistant submitted、Agent working 与真实 completed 的跨插件状态。" },
+    { "caseId": "OPS-001", "status": "not-run", "observedLevel": "L1", "evidence": "Session Assistant 已把 observer、轮询、媒体、全局监听器、注入 DOM 和 slot 注册纳入 ctx.effect 清理；仍缺三个插件组合顺序与活动连接卸载的 L3 证据。" },
+    { "caseId": "OPS-002", "status": "not-run", "observedLevel": "none", "evidence": "未执行 30 分钟 soak、键盘、reduced-motion、长气泡和无音频设备验证。" }
+  ]
+}

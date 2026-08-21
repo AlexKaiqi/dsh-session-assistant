@@ -76,6 +76,7 @@
   "homepage": "https://github.com/AlexKaiqi/dsh-session-assistant#readme",
   "scripts": {
     "test": "node --test test/*.test.mjs",
-    "check": "node --check dsh/index.js && node --check client/client.js && npm test"
+    "eval:check": "node evals/validate-suite.mjs",
+    "check": "node --check dsh/index.js && node --check client/client.js && npm run eval:check && npm test"
   }
 }

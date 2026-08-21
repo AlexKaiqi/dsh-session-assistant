@@ -6,7 +6,7 @@
 // ('settings.section') 注册; 输入框麦克风与消息小喇叭用 MutationObserver
 // 注入（选择器尽量宽松, 依赖 data- 属性而不是易变的 CSS module 哈希类名）。
 //
-// 配置读取: GET /dsh-session-assistant/config (host 路由, 持久化 ~/.dsh/talk-to-text.json)
+// 配置读取: GET /dsh-session-assistant/config (host 路由, 持久化 ~/.dsh/session-assistant.json)
 // 配置保存: POST /dsh-session-assistant/config —— 保存即生效, 无需重启。
 window.__ModuleLoader__.load({ id: "dsh-session-assistant", factory: (require) => {
   var module = { exports: {} };
@@ -20,6 +20,16 @@ window.__ModuleLoader__.load({ id: "dsh-session-assistant", factory: (require) =
   const DOUBAO_REALTIME_URL = "/dsh-realtime-voice/doubao";
   const VOICE_PROFILE_ID = "session-assistant";
 
+  const PROVIDERS = {
+    browser: { label: "浏览器原生", summary: "免费听写，不支持上下文讨论", controls: ["language"] },
+    "openai-realtime": { label: "OpenAI Realtime", summary: "WebRTC 全双工语音、上下文与工具调用", controls: ["model", "openaiVoice", "context"] },
+    "doubao-realtime": { label: "豆包 Realtime Duplex", summary: "原生双工语音、上下文与工具调用；音色由已注册路由提供", controls: ["doubaoVoice", "context"] },
+  };
+
+  function openAIProfileId(voice) {
+    return "session-assistant-openai-" + String(voice || "marin").toLowerCase();
+  }
+
   /* ══════════════════════════ 共享状态 ══════════════════════════ */
 
   // Live config (与设置页/宿主文件保持同步)
@@ -27,6 +37,8 @@ window.__ModuleLoader__.load({ id: "dsh-session-assistant", factory: (require) =
     recognitionProvider: "doubao-realtime",
     recognitionLang: "zh-CN",
     openaiRealtimeModel: "",
+    openaiRealtimeVoice: "marin",
+    openaiVoiceOptions: [],
     openaiContextMode: "recent",
     openaiRealtimeAvailable: false,
     doubaoRealtimeModel: "",
@@ -40,7 +52,8 @@ window.__ModuleLoader__.load({ id: "dsh-session-assistant", factory: (require) =
     rate: 1.0,
   };
 
-  let voices = [];              // 异步加载的可用音色
+  let voices = [];              // 异步加载的可用浏览器音色
+  const voiceListeners = new Set();
   let currentSpeakKey = null;   // 正在朗读的消息 flow key（用于按钮高亮/停止）
   const spokenKeys = new Set(); // 已自动朗读过的消息（不重复读）
   let recognition = null;       // 活动中的 browser SR 或 OpenAI Realtime controller
@@ -77,6 +90,8 @@ window.__ModuleLoader__.load({ id: "dsh-session-assistant", factory: (require) =
       "@keyframes chatvoice-listen-pulse{0%,100%{opacity:1}50%{opacity:.55}}",
       "@keyframes chatvoice-blink{50%{opacity:0}}",
       ".chatvoice-field{margin:10px 0}",
+      ".chatvoice-config-group{margin:12px 0;padding:12px 14px;border:1px solid rgba(127,127,127,.28);border-radius:10px}",
+      ".chatvoice-group-title{font-size:13px;font-weight:600;margin-bottom:4px}",
       ".chatvoice-label{display:block;font-size:12px;font-weight:500;margin-bottom:3px;opacity:.8}",
       ".chatvoice-hint{font-size:11px;opacity:.55;margin-top:3px}",
       ".chatvoice-input{width:100%;box-sizing:border-box;padding:6px 8px;font-size:13px;border-radius:6px;border:1px solid rgba(127,127,127,.4);background:transparent;color:inherit}",
@@ -263,8 +278,24 @@ window.__ModuleLoader__.load({ id: "dsh-session-assistant", factory: (require) =
   function refreshVoices() {
     try {
       const v = speechSynthesis.getVoices();
-      if (v && v.length) voices = v;
+      if (!Array.isArray(v)) return;
+      const next = [...v].sort((a, b) => {
+        const aZh = String(a.lang || "").toLowerCase().startsWith("zh") ? 0 : 1;
+        const bZh = String(b.lang || "").toLowerCase().startsWith("zh") ? 0 : 1;
+        return aZh - bZh || String(a.name || "").localeCompare(String(b.name || ""));
+      });
+      const before = voices.map((voice) => voice.name + "\u0000" + voice.lang).join("\u0001");
+      const after = next.map((voice) => voice.name + "\u0000" + voice.lang).join("\u0001");
+      voices = next;
+      if (before !== after) voiceListeners.forEach((listener) => { try { listener(); } catch { /* ignore */ } });
     } catch { /* ignore */ }
+  }
+
+  function browserVoiceOptions() {
+    return voices.map((voice) => ({
+      id: voice.name,
+      label: voice.name + (voice.lang ? " · " + voice.lang : "") + (voice.localService ? " · 本地" : ""),
+    }));
   }
 
   function pickVoice() {
@@ -850,7 +881,7 @@ window.__ModuleLoader__.load({ id: "dsh-session-assistant", factory: (require) =
         body: JSON.stringify({
           sdp: offer.sdp,
           context: transcriptionContext(ta, controller.focusedSessionId),
-          profileId: VOICE_PROFILE_ID,
+          profileId: openAIProfileId(cfg.openaiRealtimeVoice),
           routeId: cfg.openaiRealtimeModel,
         }),
         signal: controller.abort.signal,
@@ -1316,7 +1347,13 @@ window.__ModuleLoader__.load({ id: "dsh-session-assistant", factory: (require) =
     const mo = new MutationObserver(scheduleScan);
     mo.observe(document.body, { childList: true, subtree: true });
     // 兜底轮询：覆盖无 mutation 的稳定消息与自动朗读稳定性检测
-    setInterval(() => { scan(); autoSpeakScan(); }, 1200);
+    const interval = setInterval(() => { scan(); autoSpeakScan(); }, 1200);
+    return () => {
+      mo.disconnect();
+      clearInterval(interval);
+      clearTimeout(scanTimer);
+      pendingAuto.clear();
+    };
   }
 
   /* ══════════════════════════ 配置 ══════════════════════════ */
@@ -1330,6 +1367,7 @@ window.__ModuleLoader__.load({ id: "dsh-session-assistant", factory: (require) =
         cfg.doubaoRealtimeAvailable = !!(body && body.capabilities && body.capabilities.doubaoRealtime);
         cfg.doubaoRealtimeMissing = (body && body.capabilities && Array.isArray(body.capabilities.doubaoRealtimeMissing)) ? body.capabilities.doubaoRealtimeMissing : [];
         cfg.doubaoCredentialRefs = (body && body.capabilities && body.capabilities.doubaoCredentialRefs) || cfg.doubaoCredentialRefs;
+        cfg.openaiVoiceOptions = (body && body.capabilities && Array.isArray(body.capabilities.openaiVoiceOptions)) ? body.capabilities.openaiVoiceOptions : [];
         cfg.realtimeModels = (body && body.capabilities && Array.isArray(body.capabilities.realtimeModels)) ? body.capabilities.realtimeModels : [];
         refreshMicButtonSupport();
       })
@@ -1340,8 +1378,12 @@ window.__ModuleLoader__.load({ id: "dsh-session-assistant", factory: (require) =
 
   function Section() {
     const [state, setState] = react.useState({ loading: true, value: { ...cfg }, saving: false, saved: false, error: "" });
+    const [, setVoiceRevision] = react.useState(0);
     react.useEffect(() => {
       let alive = true;
+      const updateVoices = () => { if (alive) setVoiceRevision((revision) => revision + 1); };
+      voiceListeners.add(updateVoices);
+      refreshVoices();
       fetch(CONFIG_URL, { cache: "no-store" })
         .then((r) => r.json())
         .then((body) => {
@@ -1352,11 +1394,12 @@ window.__ModuleLoader__.load({ id: "dsh-session-assistant", factory: (require) =
           cfg.doubaoRealtimeAvailable = !!(body && body.capabilities && body.capabilities.doubaoRealtime);
           cfg.doubaoRealtimeMissing = (body && body.capabilities && Array.isArray(body.capabilities.doubaoRealtimeMissing)) ? body.capabilities.doubaoRealtimeMissing : [];
           cfg.doubaoCredentialRefs = (body && body.capabilities && body.capabilities.doubaoCredentialRefs) || cfg.doubaoCredentialRefs;
+          cfg.openaiVoiceOptions = (body && body.capabilities && Array.isArray(body.capabilities.openaiVoiceOptions)) ? body.capabilities.openaiVoiceOptions : [];
           cfg.realtimeModels = (body && body.capabilities && Array.isArray(body.capabilities.realtimeModels)) ? body.capabilities.realtimeModels : [];
           setState((s) => ({ ...s, loading: false, value: { ...cfg } }));
         })
         .catch((e) => { if (!alive) return; setState((s) => ({ ...s, loading: false, error: String((e && e.message) || e) })); });
-      return () => { alive = false; };
+      return () => { alive = false; voiceListeners.delete(updateVoices); };
     }, []);
 
     const set = (k, v) => setState((s) => ({ ...s, value: { ...s.value, [k]: v }, saved: false }));
@@ -1376,6 +1419,7 @@ window.__ModuleLoader__.load({ id: "dsh-session-assistant", factory: (require) =
             cfg.doubaoRealtimeAvailable = !!(body.capabilities && body.capabilities.doubaoRealtime);
             cfg.doubaoRealtimeMissing = (body.capabilities && Array.isArray(body.capabilities.doubaoRealtimeMissing)) ? body.capabilities.doubaoRealtimeMissing : [];
             cfg.doubaoCredentialRefs = (body.capabilities && body.capabilities.doubaoCredentialRefs) || cfg.doubaoCredentialRefs;
+            cfg.openaiVoiceOptions = (body.capabilities && Array.isArray(body.capabilities.openaiVoiceOptions)) ? body.capabilities.openaiVoiceOptions : [];
             cfg.realtimeModels = (body.capabilities && Array.isArray(body.capabilities.realtimeModels)) ? body.capabilities.realtimeModels : [];
             setState((s) => ({ ...s, saving: false, saved: true, value: { ...cfg } }));
             refreshMicButtonSupport();
@@ -1393,6 +1437,11 @@ window.__ModuleLoader__.load({ id: "dsh-session-assistant", factory: (require) =
     const realtimeModels = Array.isArray(cfg.realtimeModels) ? cfg.realtimeModels : [];
     const doubaoModels = realtimeModels.filter((model) => model.protocol === "doubao-realtime-duplex");
     const openaiModels = realtimeModels.filter((model) => model.protocol !== "doubao-realtime-duplex");
+    const provider = PROVIDERS[selectedProvider] || PROVIDERS.browser;
+    const controls = new Set(provider.controls);
+    const openaiVoices = Array.isArray(cfg.openaiVoiceOptions) ? cfg.openaiVoiceOptions : [];
+    const browserVoices = browserVoiceOptions();
+    const browserVoiceMissing = !!state.value.voiceName && !browserVoices.some((voice) => voice.id === state.value.voiceName);
     const status = !window.isSecureContext
       ? "○ 非安全上下文：语音输入不可用，朗读仍可用（请用 http://127.0.0.1:3080 访问）"
       : (selectedProvider === "openai-realtime"
@@ -1408,71 +1457,77 @@ window.__ModuleLoader__.load({ id: "dsh-session-assistant", factory: (require) =
           : (srSupported() ? "● 浏览器原生语音识别可用" : "○ 当前浏览器不支持原生语音识别（推荐 Edge 或 Chrome）")));
 
     return react.createElement("div", { style: { padding: "14px 0", maxWidth: 560 } }, [
-      react.createElement("div", { key: "s", className: "chatvoice-status" }, status),
-      react.createElement("div", { key: "provider", className: "chatvoice-field" }, [
-        react.createElement("label", { key: "l", className: "chatvoice-label" }, "语音方式"),
-        react.createElement("select", {
-          key: "i", className: "chatvoice-input", value: selectedProvider,
-          onChange: (e) => set("recognitionProvider", e.target.value),
-        }, [
-          react.createElement("option", { key: "browser", value: "browser" }, "浏览器原生（免费，无 API Key）"),
-          react.createElement("option", { key: "openai", value: "openai-realtime" }, "OpenAI Realtime（WebRTC）"),
-          react.createElement("option", { key: "doubao", value: "doubao-realtime" }, "豆包 Realtime Duplex（原生双工 + 工具调用）"),
+      react.createElement("div", { key: "provider-group", className: "chatvoice-config-group" }, [
+        react.createElement("div", { key: "title", className: "chatvoice-group-title" }, "实时语音助理"),
+        react.createElement("div", { key: "provider", className: "chatvoice-field" }, [
+          react.createElement("label", { key: "l", className: "chatvoice-label" }, "Provider"),
+          react.createElement("select", {
+            key: "i", className: "chatvoice-input", value: selectedProvider,
+            onChange: (e) => set("recognitionProvider", e.target.value),
+          }, Object.entries(PROVIDERS).map(([id, entry]) => react.createElement("option", { key: id, value: id }, entry.label))),
+          react.createElement("div", { key: "hint", className: "chatvoice-hint" }, provider.summary),
         ]),
+        react.createElement("div", { key: "status", className: "chatvoice-status" }, status),
+        controls.has("language") ? react.createElement("div", { key: "language", className: "chatvoice-field" }, [
+          react.createElement("label", { key: "l", className: "chatvoice-label" }, "识别语言"),
+          react.createElement("select", {
+            key: "i", className: "chatvoice-input", value: state.value.recognitionLang,
+            onChange: (e) => set("recognitionLang", e.target.value),
+          }, [
+            react.createElement("option", { key: "zh", value: "zh-CN" }, "中文（普通话）zh-CN"),
+            react.createElement("option", { key: "en", value: "en-US" }, "English (US) en-US"),
+          ]),
+        ]) : null,
+        controls.has("model") ? react.createElement("div", { key: "model", className: "chatvoice-field" }, [
+          react.createElement("label", { key: "l", className: "chatvoice-label" }, "Realtime 模型"),
+          react.createElement("select", {
+            key: "i", className: "chatvoice-input",
+            value: state.value.openaiRealtimeModel || (openaiModels[0] && openaiModels[0].id) || "",
+            onChange: (e) => set("openaiRealtimeModel", e.target.value),
+            disabled: openaiModels.length <= 1,
+          }, openaiModels.length
+            ? openaiModels.map((model) => react.createElement("option", { key: model.id, value: model.id }, (model.displayName || model.model) + " · " + model.provider))
+            : [react.createElement("option", { key: "none", value: "" }, "未发现已注册的 OpenAI Realtime 模型")]),
+        ]) : null,
+        controls.has("openaiVoice") ? react.createElement("div", { key: "openai-voice", className: "chatvoice-field" }, [
+          react.createElement("label", { key: "l", className: "chatvoice-label" }, "输出音色"),
+          react.createElement("select", {
+            key: "i", className: "chatvoice-input", value: state.value.openaiRealtimeVoice || "marin",
+            onChange: (e) => set("openaiRealtimeVoice", e.target.value),
+            disabled: openaiVoices.length === 0,
+          }, openaiVoices.length
+            ? openaiVoices.map((voice) => react.createElement("option", { key: voice.id, value: voice.id }, voice.name + (voice.recommended ? "（推荐）" : "")))
+            : [react.createElement("option", { key: "none", value: "marin" }, "Marin（推荐）")]),
+        ]) : null,
+        controls.has("doubaoVoice") ? react.createElement("div", { key: "doubao-voice", className: "chatvoice-field" }, [
+          react.createElement("label", { key: "l", className: "chatvoice-label" }, "实时音色"),
+          react.createElement("select", {
+            key: "i", className: "chatvoice-input",
+            value: state.value.doubaoRealtimeModel || (doubaoModels[0] && doubaoModels[0].id) || "",
+            onChange: (e) => set("doubaoRealtimeModel", e.target.value),
+            disabled: doubaoModels.length <= 1,
+          }, doubaoModels.length
+            ? doubaoModels.map((model) => react.createElement("option", { key: model.id, value: model.id }, model.displayName || model.model))
+            : [react.createElement("option", { key: "none", value: "" }, "未发现已启用的豆包实时音色")]),
+          react.createElement("div", { key: "hint", className: "chatvoice-hint" }, "音色来自“模型”设置中为豆包语音启用的路由。"),
+        ]) : null,
+        controls.has("context") ? react.createElement("div", { key: "context", className: "chatvoice-field" }, [
+          react.createElement("label", { key: "l", className: "chatvoice-label" }, "上下文"),
+          react.createElement("select", {
+            key: "i", className: "chatvoice-input",
+            value: state.value.openaiContextMode || "recent",
+            onChange: (e) => set("openaiContextMode", e.target.value),
+          }, [
+            react.createElement("option", { key: "recent", value: "recent" }, "当前草稿 + 最近可见对话（推荐）"),
+            react.createElement("option", { key: "draft", value: "draft" }, "仅当前草稿"),
+            react.createElement("option", { key: "off", value: "off" }, "不同步上下文"),
+          ]),
+        ]) : null,
       ]),
-      selectedProvider === "browser" ? react.createElement("div", { key: "f1", className: "chatvoice-field" }, [
-        react.createElement("label", { key: "l", className: "chatvoice-label" }, "识别语言"),
-        react.createElement("select", {
-          key: "i", className: "chatvoice-input", value: state.value.recognitionLang,
-          onChange: (e) => set("recognitionLang", e.target.value),
-        }, [
-          react.createElement("option", { key: "zh", value: "zh-CN" }, "中文（普通话）zh-CN"),
-          react.createElement("option", { key: "en", value: "en-US" }, "English (US) en-US"),
-        ]),
-      ]) : null,
-      selectedProvider === "openai-realtime" ? react.createElement("div", { key: "rt", className: "chatvoice-field" }, [
-        react.createElement("label", { key: "l", className: "chatvoice-label" }, "Realtime 模型"),
-        react.createElement("select", {
-          key: "i", className: "chatvoice-input",
-          value: state.value.openaiRealtimeModel || (openaiModels[0] && openaiModels[0].id) || "",
-          onChange: (e) => set("openaiRealtimeModel", e.target.value),
-          disabled: openaiModels.length <= 1,
-        }, openaiModels.length
-          ? openaiModels.map((model) => react.createElement("option", { key: model.id, value: model.id }, (model.displayName || model.model) + " · " + model.provider))
-          : [react.createElement("option", { key: "none", value: "" }, "未发现已注册的 Realtime 模型")]),
-        react.createElement("label", { key: "cl", className: "chatvoice-label", style: { marginTop: 10 } }, "上下文"),
-        react.createElement("select", {
-          key: "ci", className: "chatvoice-input",
-          value: state.value.openaiContextMode || "recent",
-          onChange: (e) => set("openaiContextMode", e.target.value),
-        }, [
-          react.createElement("option", { key: "recent", value: "recent" }, "当前草稿 + 最近可见对话（推荐）"),
-          react.createElement("option", { key: "draft", value: "draft" }, "仅当前草稿"),
-          react.createElement("option", { key: "off", value: "off" }, "不同步上下文"),
-        ]),
-      ]) : null,
-      selectedProvider === "doubao-realtime" ? react.createElement("div", { key: "doubao-rt", className: "chatvoice-field" }, [
-        react.createElement("label", { key: "l", className: "chatvoice-label" }, "Realtime 模型"),
-        react.createElement("select", {
-          key: "i", className: "chatvoice-input",
-          value: state.value.doubaoRealtimeModel || (doubaoModels[0] && doubaoModels[0].id) || "",
-          onChange: (e) => set("doubaoRealtimeModel", e.target.value),
-          disabled: doubaoModels.length <= 1,
-        }, doubaoModels.length
-          ? doubaoModels.map((model) => react.createElement("option", { key: model.id, value: model.id }, (model.displayName || model.model) + " · 火山引擎"))
-          : [react.createElement("option", { key: "none", value: "" }, "未发现已注册的豆包 Duplex 模型")]),
-        react.createElement("label", { key: "cl", className: "chatvoice-label", style: { marginTop: 10 } }, "上下文"),
-        react.createElement("select", {
-          key: "ci", className: "chatvoice-input",
-          value: state.value.openaiContextMode || "recent",
-          onChange: (e) => set("openaiContextMode", e.target.value),
-        }, [
-          react.createElement("option", { key: "recent", value: "recent" }, "当前草稿 + 最近可见对话（推荐）"),
-          react.createElement("option", { key: "draft", value: "draft" }, "仅当前草稿"),
-          react.createElement("option", { key: "off", value: "off" }, "不同步上下文"),
-        ]),
-      ]) : null,
-      react.createElement("div", { key: "f2", className: "chatvoice-field" }, [
+      react.createElement("div", { key: "read-aloud-group", className: "chatvoice-config-group" }, [
+        react.createElement("div", { key: "title", className: "chatvoice-group-title" }, "回复朗读（浏览器）"),
+        react.createElement("div", { key: "hint", className: "chatvoice-hint" }, "与上面的实时语音 Provider 独立；手动小喇叭和自动朗读共用这里的音色与语速。"),
+        react.createElement("div", { key: "auto", className: "chatvoice-field" }, [
         react.createElement("label", { key: "l", className: "chatvoice-label" }, [
           react.createElement("input", {
             key: "c", type: "checkbox", checked: !!state.value.autoSpeak, style: { marginRight: 6 },
@@ -1480,29 +1535,34 @@ window.__ModuleLoader__.load({ id: "dsh-session-assistant", factory: (require) =
           }),
           "自动朗读新回复（可点小喇叭随时停止）",
         ]),
-        react.createElement("select", {
+        state.value.autoSpeak ? react.createElement("select", {
           key: "m", className: "chatvoice-input chatvoice-mode", style: { marginTop: 6 },
           value: state.value.autoSpeakMode || "final",
           onChange: (e) => set("autoSpeakMode", e.target.value),
         }, [
           react.createElement("option", { key: "f", value: "final" }, "只读最终结论（跳过思维链）"),
           react.createElement("option", { key: "a", value: "all" }, "全部朗读（思维链 + 结论）"),
+        ]) : null,
         ]),
-      ]),
-      react.createElement("div", { key: "f3", className: "chatvoice-field" }, [
-        react.createElement("label", { key: "l", className: "chatvoice-label" }, "朗读音色"),
-        react.createElement("input", {
-          key: "i", type: "text", className: "chatvoice-input", value: state.value.voiceName || "",
-          placeholder: "如：Microsoft Xiaoxiao Online (Natural) - Chinese (Mainland)",
+        react.createElement("div", { key: "browser-voice", className: "chatvoice-field" }, [
+        react.createElement("label", { key: "l", className: "chatvoice-label" }, "浏览器朗读音色"),
+        react.createElement("select", {
+          key: "i", className: "chatvoice-input", value: state.value.voiceName || "",
           onChange: (e) => set("voiceName", e.target.value),
-        }),
-      ]),
-      react.createElement("div", { key: "f4", className: "chatvoice-field" }, [
+        }, [
+          react.createElement("option", { key: "auto", value: "" }, "自动选择（优先中文自然音色）"),
+          browserVoiceMissing ? react.createElement("option", { key: "missing", value: state.value.voiceName }, state.value.voiceName + "（当前不可用）") : null,
+          ...browserVoices.map((voice) => react.createElement("option", { key: voice.id, value: voice.id }, voice.label)),
+        ]),
+        browserVoices.length === 0 ? react.createElement("div", { key: "empty", className: "chatvoice-hint" }, "浏览器尚未返回可用音色；稍后打开此页会自动刷新。") : null,
+        ]),
+        react.createElement("div", { key: "rate", className: "chatvoice-field" }, [
         react.createElement("label", { key: "l", className: "chatvoice-label" }, "朗读语速"),
         react.createElement("input", {
           key: "i", type: "number", className: "chatvoice-input", min: 0.5, max: 2, step: 0.1,
           value: state.value.rate, onChange: (e) => set("rate", Number(e.target.value)),
         }),
+        ]),
       ]),
       state.error ? react.createElement("div", { key: "e", className: "chatvoice-error" }, state.error) : null,
       react.createElement("div", { key: "b", style: { marginTop: 12 } }, [
@@ -1524,29 +1584,67 @@ window.__ModuleLoader__.load({ id: "dsh-session-assistant", factory: (require) =
     try {
       if (typeof speechSynthesis !== "undefined") {
         if (speechSynthesis.addEventListener) speechSynthesis.addEventListener("voiceschanged", refreshVoices);
-        speechSynthesis.onvoiceschanged = refreshVoices;
+        else speechSynthesis.onvoiceschanged = refreshVoices;
       }
     } catch { /* ignore */ }
     try { document.addEventListener("pointerdown", warmUpSpeech, { once: true, capture: true }); } catch { /* ignore */ }
     loadConfig();
     scan();
-    startObserver();
+    const stopObserver = startObserver();
+    return () => {
+      recognitionSession++;
+      const active = recognition;
+      recognition = null;
+      try { active && active.stop(); } catch { /* ignore */ }
+      try { speechSynthesis.cancel(); } catch { /* ignore */ }
+      try { stopObserver(); } catch { /* ignore */ }
+      try { window.removeEventListener("scroll", positionPreview, true); } catch { /* ignore */ }
+      try { window.removeEventListener("resize", positionPreview); } catch { /* ignore */ }
+      try {
+        if (typeof speechSynthesis !== "undefined") {
+          if (speechSynthesis.removeEventListener) speechSynthesis.removeEventListener("voiceschanged", refreshVoices);
+          else if (speechSynthesis.onvoiceschanged === refreshVoices) speechSynthesis.onvoiceschanged = null;
+        }
+      } catch { /* ignore */ }
+      try { document.removeEventListener("pointerdown", warmUpSpeech, true); } catch { /* ignore */ }
+      clearTimeout(toastTimer);
+      clearTimeout(previewTimer);
+      closeVoiceWorkspacePanel();
+      for (const node of [toastEl, previewEl]) {
+        try { node && node.remove(); } catch { /* ignore */ }
+      }
+      toastEl = null;
+      previewEl = null;
+      previewTa = null;
+      document.querySelectorAll("[data-chatvoice-mic],[data-chatvoice-speak]").forEach((node) => node.remove());
+      const style = document.getElementById("chatvoice-style");
+      if (style) style.remove();
+      clientCtx = null;
+    };
   }
 
   function apply(ctx) {
     clientCtx = ctx;
     // 设置页分组（沿用 free-vision 已验证的 slots 注册写法）
-    ctx.slots.inject("settings.section", () => ctx.slots.register({
-      name: "settings.section",
-      id: "dsh-session-assistant",
-      order: 60,
-      label: () => "Session Assistant",
-      locale: NS,
-      inject: () => ({})
-    }, () => react.createElement(Section)));
+    ctx.effect(() => ctx.slots.inject("settings.section", () => ctx.slots.register({
+        name: "settings.section",
+        id: "dsh-session-assistant",
+        order: 60,
+        label: () => "Session Assistant",
+        locale: NS,
+        inject: () => ({})
+      }, () => react.createElement(Section))), "dsh-session-assistant: settings.section");
 
-    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
-    else boot();
+    ctx.effect(() => {
+      let disposeBoot = null;
+      const start = () => { disposeBoot = boot(); };
+      if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start, { once: true });
+      else start();
+      return () => {
+        document.removeEventListener("DOMContentLoaded", start);
+        if (disposeBoot) disposeBoot();
+      };
+    }, "dsh-session-assistant: client lifecycle");
   }
 
   exports.name = "dsh-session-assistant";
