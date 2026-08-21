@@ -1,0 +1,43 @@
+import { z } from 'zod'
+
+const settingsSchema = z.object({
+  recognitionProvider: z.enum(['browser', 'openai-realtime', 'doubao-realtime']),
+  recognitionLang: z.enum(['zh-CN', 'en-US']),
+  openaiRealtimeModel: z.string(),
+  openaiRealtimeVoice: z.string(),
+  doubaoRealtimeModel: z.string(),
+  openaiContextMode: z.enum(['off', 'draft', 'recent']),
+  autoSpeak: z.boolean(),
+  autoSpeakMode: z.enum(['final', 'all']),
+  voiceName: z.string(),
+  rate: z.number(),
+}).strict()
+
+const viewSchema = z.object({
+  revision: z.number(),
+  writable: z.boolean(),
+  settings: settingsSchema,
+}).strict()
+
+export function sessionAssistantRemoteDescriptors() {
+  return [
+    {
+      id: 'dsh-session-assistant#sessionAssistantSettings/describe',
+      service: 'sessionAssistantSettings', namespace: 'sessionAssistantSettings', method: 'describe',
+      invocation: { kind: 'direct' as const }, parameters: [],
+      result: { mode: 'strict' as const, typeSymbol: 'dsh-session-assistant#SessionAssistantSettingsView', schema: viewSchema },
+      sourceLocation: { file: 'src/settings-remote.ts', line: 35, column: 3 },
+    },
+    {
+      id: 'dsh-session-assistant#sessionAssistantSettings/save',
+      service: 'sessionAssistantSettings', namespace: 'sessionAssistantSettings', method: 'save',
+      invocation: { kind: 'direct' as const },
+      parameters: [{
+        name: 'request', wire: 'request' as const, source: 'json' as const,
+        codec: { mode: 'strict' as const, typeSymbol: 'dsh-session-assistant#SaveSessionAssistantSettingsRequest', schema: z.object({ expectedRevision: z.number(), settings: settingsSchema }).strict() },
+      }],
+      result: { mode: 'strict' as const, typeSymbol: 'dsh-session-assistant#SessionAssistantSettingsView', schema: viewSchema },
+      sourceLocation: { file: 'src/settings-remote.ts', line: 41, column: 3 },
+    },
+  ]
+}

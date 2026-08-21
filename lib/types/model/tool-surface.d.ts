@@ -1,0 +1,76 @@
+export declare const UPDATE_WORKING_DRAFT_TOOL: {
+    type: string;
+    name: string;
+    strict: boolean;
+    description: string;
+    parameters: {
+        type: string;
+        additionalProperties: boolean;
+        properties: {
+            draft: {
+                type: string;
+                description: string;
+            };
+            summary: {
+                type: string;
+                description: string;
+            };
+            status: {
+                type: string;
+                enum: string[];
+            };
+        };
+        required: string[];
+    };
+};
+export declare const SUBMIT_TO_AGENT_TOOL: {
+    type: string;
+    name: string;
+    strict: boolean;
+    description: string;
+    parameters: {
+        type: string;
+        additionalProperties: boolean;
+        properties: {
+            draft: {
+                type: string;
+                description: string;
+            };
+        };
+        required: string[];
+    };
+};
+export declare const END_VOICE_SESSION_TOOL: {
+    type: string;
+    name: string;
+    strict: boolean;
+    description: string;
+    parameters: {
+        type: string;
+        additionalProperties: boolean;
+        properties: {};
+    };
+};
+export declare const SESSION_ASSISTANT_TOOLS: {
+    type: string;
+    name: string;
+    strict: boolean;
+    description: string;
+    parameters: {
+        type: string;
+        additionalProperties: boolean;
+        properties: {};
+    };
+}[];
+export declare const SESSION_ASSISTANT_TOOL_OUTPUT: {
+    update_working_draft: {
+        required: string[];
+    };
+    submit_to_agent: {
+        required: string[];
+    };
+    end_voice_session: {
+        required: never[];
+    };
+};
+//# sourceMappingURL=tool-surface.d.ts.map

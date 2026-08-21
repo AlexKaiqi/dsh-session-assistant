@@ -3,22 +3,36 @@
   "version": "0.1.0",
   "description": "Session-scoped full-duplex voice assistant with tool-controlled drafting and Agent submission for DeepSeek Harness.",
   "type": "module",
-  "main": "./dsh/index.js",
+  "main": "./lib/index.js",
   "exports": {
-    ".": "./dsh/index.js",
-    "./dsh": "./dsh/index.js",
-    "./client": "./client/client.js",
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "types": "./lib/types/client/index.d.ts",
+      "default": "./lib/client.js"
+    },
+    "./typert": {
+      "types": "./lib/types/typert-host.d.ts",
+      "default": "./lib/typert.host.js"
+    },
+    "./remote": {
+      "types": "./lib/types/typert-remote.d.ts",
+      "default": "./lib/typert.remote-client.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
-    "dsh",
-    "client",
+    "lib",
     "cordis.patch.yml",
     "README.md",
+    "README.en.md",
     "LICENSE",
     "CHANGELOG.md",
-    "docs",
-    "README.en.md"
+    "docs/*.gif",
+    "spec",
+    "plugin-spec.json"
   ],
   "keywords": [
     "dsh",
@@ -39,10 +53,11 @@
   ],
   "license": "MIT",
   "engines": {
-    "node": ">=18"
+    "node": "^22.19.0 || >=24.0.0"
   },
   "dependencies": {
-    "@deepseek-ai/schemastery": "^3.18.1"
+    "@deepseek-ai/schemastery": "^3.18.1",
+    "zod": "^4.4.3"
   },
   "dsh": {
     "inventory": {
@@ -50,9 +65,21 @@
         "zh": "与上下文感知模型双工语音讨论，通过独立修改操作维护可编辑草稿，定稿后再提交给主 Agent。",
         "en": "Hold a full-duplex contextual voice discussion, maintain an editable draft through separate mutations, and submit only after finalization."
       },
-      "tags": ["voice", "realtime", "drafting", "productivity"],
+      "tags": [
+        "voice",
+        "realtime",
+        "drafting",
+        "productivity"
+      ],
       "dependencies": [
-        "dsh-multi-model-provider"
+        "dsh-multi-model-provider",
+        "dsh-realtime-voice",
+        "@deepseek-ai/dsh-settings",
+        "@deepseek-ai/dsh-api-remotes",
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-slots"
       ]
     },
     "bundle": {
@@ -60,7 +87,12 @@
     },
     "client": {
       "inject": [
-        "@deepseek-ai/dsh-client-ui-settings"
+        "dsh-realtime-voice",
+        "@deepseek-ai/dsh-api-remotes",
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-slots"
       ],
       "platform": "web"
     }
@@ -75,8 +107,44 @@
   },
   "homepage": "https://github.com/AlexKaiqi/dsh-session-assistant#readme",
   "scripts": {
+    "build": "npm run clean && tsc --project tsconfig.build.json && tsdown && node scripts/normalize-built-client.mjs",
+    "clean": "node -e \"require('node:fs').rmSync('lib', { recursive: true, force: true })\"",
+    "typecheck": "tsc --project tsconfig.json",
     "test": "node --test test/*.test.mjs",
     "eval:check": "node evals/validate-suite.mjs",
-    "check": "node --check dsh/index.js && node --check client/client.js && npm run eval:check && npm test"
+    "check": "npm run typecheck && npm run eval:check && npm run build && npm test"
+  },
+  "types": "./lib/types/index.d.ts",
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-settings": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-typert-protocol": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-api-remotes": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-client-runtime": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-client-ui-conversation": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-client-ui-settings": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-client-ui-slots": "^0.1.0-rc.6",
+    "@deepseek-ai/schemastery": "^3.18.1",
+    "dsh-multi-model-provider": "^0.1.0-rc.9",
+    "dsh-realtime-voice": "^0.1.0",
+    "react": "^18.2.0"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-settings": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-typert-protocol": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-api-remotes": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-client-runtime": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-client-ui-conversation": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-client-ui-settings": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-client-ui-slots": "^0.1.0-rc.6",
+    "@deepseek-ai/schemastery": "^3.18.1",
+    "dsh-multi-model-provider": "file:../dsh-multi-model-provider",
+    "dsh-realtime-voice": "file:../dsh-realtime-voice",
+    "react": "^18.2.0",
+    "@types/node": "^24.13.3",
+    "@types/react": "^18.3.1",
+    "tsdown": "^0.22.14",
+    "typescript": "^6.0.3"
   }
 }

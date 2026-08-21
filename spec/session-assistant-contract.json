@@ -1,7 +1,17 @@
 {
-  "version": 1,
+  "version": 2,
   "profileId": "session-assistant",
-  "runtime": "dsh-multi-model-provider/realtimeModelRuntime",
+  "settingsNamespace": "session-assistant",
+  "settingsRemote": "sessionAssistantSettings",
+  "voiceService": "realtimeVoice",
+  "slots": [
+    "conversation.input.right",
+    "conversation.input.dock",
+    "conversation.chat.assistant-actions",
+    "settings.section"
+  ],
   "tools": ["update_working_draft", "submit_to_agent", "end_voice_session"],
+  "draftMutation": "inputActions.setDraft",
+  "submission": "inputActions.submit",
   "executionBoundary": "primary-agent-only"
 }

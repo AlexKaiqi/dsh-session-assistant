@@ -1,7 +1,6 @@
-# dsh bundle layer: mount the Session Assistant plugin (dsh/index.js via the
-# package root export). The host exposes settings routes and, when selected,
-# initializes authenticated OpenAI WebRTC or Doubao Duplex WebSocket
-# deliberation/drafting sessions from registered model and credential references.
+# Session product layer. Host settings and profile registration consume the
+# shared Settings and realtime model runtime; the Web half requires the
+# provider-neutral realtimeVoice Client service from dsh-realtime-voice.
 - insert:
     - id: dsh-session-assistant
       name: 'dsh-session-assistant'

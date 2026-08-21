@@ -5,35 +5,32 @@
   "facts": {
     "modelVisible": true,
     "registersTools": false,
-    "filesystem": "write",
+    "filesystem": "read",
     "persistentState": true,
     "subprocess": false,
     "subagents": false,
-    "temporaryResources": false,
+    "temporaryResources": true,
     "customProtocol": false
   },
   "package": { "path": "package.json" },
   "model": {
-    "dir": "dsh/model",
-    "readme": "dsh/model/README.md",
+    "dir": "src/model",
+    "readme": "src/model/README.md",
     "files": [
-      { "path": "prompt.js", "export": "PROMPT", "role": "staticText" },
-      { "path": "tool-surface.js", "export": "SESSION_ASSISTANT_TOOLS", "role": "toolSurface", "toolName": "submit_to_agent", "helpPointer": "dsh/model/README.md" },
-      { "path": "tool-surface.js", "export": "SESSION_ASSISTANT_TOOL_OUTPUT", "role": "contract", "contractKind": "toolOutput" }
+      { "path": "prompt.ts", "export": "PROMPT", "role": "staticText" },
+      { "path": "tool-surface.ts", "export": "SESSION_ASSISTANT_TOOLS", "role": "toolSurface", "toolName": "submit_to_agent", "helpPointer": "src/model/README.md" },
+      { "path": "tool-surface.ts", "export": "SESSION_ASSISTANT_TOOL_OUTPUT", "role": "contract", "contractKind": "toolOutput" }
     ]
   },
-  "help": {
-    "file": "dsh/help.js",
-    "versionExport": "VERSION",
-    "commands": ["discuss", "draft", "finalize", "submit", "end"]
-  },
+  "help": { "file": "src/help.ts", "versionExport": "VERSION", "commands": ["discuss", "draft", "finalize", "submit", "end"] },
   "tests": {
     "contractTests": [
-      { "file": "test/session-assistant.test.mjs", "references": ["PROMPT", "SESSION_ASSISTANT_TOOLS", "SESSION_ASSISTANT_TOOL_OUTPUT"] }
+      { "file": "test/host-settings.test.mjs", "references": ["PROMPT", "Config", "SETTINGS_NAMESPACE", "SESSION_ASSISTANT_TOOLS", "SESSION_ASSISTANT_TOOL_OUTPUT"] },
+      { "file": "test/client-contract.test.mjs", "references": ["conversation.input.right", "conversation.input.dock", "conversation.chat.assistant-actions", "settings.section"] }
     ],
     "runtimeTests": [
-      { "file": "test/session-assistant.test.mjs", "layer": "L1" },
-      { "file": "test/session-assistant.test.mjs", "layer": "L2" }
+      { "file": "test/client-controller.test.mjs", "layer": "L1" },
+      { "file": "test/host-settings.test.mjs", "layer": "L2" }
     ]
   },
   "contracts": [

@@ -1,19 +1,21 @@
 # dsh-session-assistant
 
-Let a user think with a context-aware model through natural full-duplex speech, continuously maintain an editable draft, and finally submit a mature intent or finished text to the primary Agent.
+A Session-scoped product layer for discussing a request by voice, maintaining the current composer draft, and explicitly submitting the final text to the primary Agent.
 
-This is the Session-scoped product and UI plugin. It does not connect to speech providers, read API keys, or execute tasks on behalf of the primary Agent.
+## Architecture
 
-## Boundary
+- Host registers the DSH Settings namespace `session-assistant` with live application and the composition `Config` as its base layer.
+- The first run may import `~/.dsh/session-assistant.json`, `talk-to-text.json`, or `chatvoice.json` only when no user overrides exist. Legacy files are never written.
+- A strict plugin-owned Typert Remote exposes only revision-fenced `describe` and `save` operations for that namespace.
+- Client UI is registered in `conversation.input.right`, `conversation.input.dock`, `conversation.chat.assistant-actions`, and `settings.section`.
+- `dsh-realtime-voice` owns browser/provider media transports and exposes the provider-neutral `realtimeVoice` Client service.
 
-- `dsh-session-assistant`: binds the focused Session at voice start and owns context projection, role, three voice operations, and UI.
-- `dsh-multi-model-provider`: Realtime catalog, selection, credential resolution, profile runtime, and adapter contract.
-- `dsh-realtime-voice`: optional GPT Realtime and Doubao Duplex adapters plus browser audio transports.
+The voice model can only call `update_working_draft`, `submit_to_agent`, or `end_voice_session`. Draft changes use `inputActions.setDraft(fullText)` and submission uses `inputActions.submit()`. Each controller remains bound to the Slot `sessionId`; disposed or closed controllers reject late tool application.
 
-The voice model can only replace the complete draft, explicitly submit the final text to the primary Agent, or explicitly close the voice connection. Spoken discussion does not automatically mutate the draft. Agent tools, files, shell, network, and provider credentials are unavailable to the voice model.
+OpenAI and Doubao route/profile/voice choices remain settings, but this plugin consumes only normalized voice events. Read-aloud resolves finalized message text from Session state by `messageId`, never from rendered DOM.
 
-This plugin depends only on the unified runtime in `dsh-multi-model-provider`. Install `dsh-realtime-voice` when GPT Realtime or Doubao Duplex transport is needed; browser-native dictation does not require it. Configure Realtime models and credentials in the DSH model registry; this plugin only selects available routes.
+## Verification
 
-One voice connection remains bound to the `focusedSessionId` captured at startup. Changing focus never silently retargets draft mutation or submission. A personal knowledge base is not a core dependency.
-
-Session settings live at `~/.dsh/session-assistant.json`, with one-time fallback reads from the former Talk to Text settings files.
+```bash
+npm run check
+```

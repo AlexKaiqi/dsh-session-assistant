@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Host 配置迁移到 DSH Settings `session-assistant` 命名空间，实时应用 composition base；旧 JSON 仅作一次性导入源且不再写回
+- 新增插件自有严格 Typert Remote，设置保存带 revision 防冲突；移除自定义 HTTP 配置协议
+- Client 重写为四个 Slot 组件，只消费 `realtimeVoice` 标准事件和 Session `inputActions`
+- 修复 Client bundle 将 `zod`、Schemastery 与 Host Settings 模块错误外置导致 Harness loader 加载失败；浏览器产物现在只请求已声明的 React 运行时
+- 移除 Session Assistant 内所有 Provider 媒体传输、DOM observer/selector、猜测提交按钮和页面 overlay
+- 新增 controller 生命周期、并发编辑、显式提交/结束、bounded context、messageId 朗读与禁止实现字符串测试
+
 - 设置页改为 Provider 能力驱动：浏览器、OpenAI Realtime、豆包 Duplex 只显示各自支持的字段；GPT 提供官方内置音色下拉，豆包直接选择已启用的音色路由
 - 浏览器回复朗读从实时语音 Provider 中拆出独立分组，音色由 `speechSynthesis.getVoices()` 动态枚举，不再要求手填名称
 - 修复 Session Profile 固定 `vivi` 覆盖豆包已选音色的问题；OpenAI 每个受支持音色使用独立 Profile，确保建连前选择真实生效
