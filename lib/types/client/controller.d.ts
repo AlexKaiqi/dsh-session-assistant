@@ -193,14 +193,21 @@ export declare class VoiceController {
     private organizeNotes;
     private publish;
 }
-export declare function voiceConversationOptions(settings: SessionAssistantSettings, context: string): {
+export interface VoiceRouteLike {
+    readonly id: string;
+    readonly protocol: string;
+    readonly available?: boolean;
+}
+/** Resolve the configured route, or the first callable route for the selected Realtime protocol. */
+export declare function selectVoiceRoute(settings: SessionAssistantSettings, models: readonly VoiceRouteLike[]): string;
+export declare function voiceConversationOptions(settings: SessionAssistantSettings, context: string, routeId?: string): {
     routeId: string;
     profileId: string;
     context: string;
     language: import("../settings-values.ts").RecognitionLanguage;
 };
 /** Open a full-duplex preview session using the actual selected Realtime model/voice. */
-export declare function voiceAgentPreviewOptions(settings: SessionAssistantSettings): {
+export declare function voiceAgentPreviewOptions(settings: SessionAssistantSettings, routeId?: string): {
     routeId: string;
     profileId: string;
 };

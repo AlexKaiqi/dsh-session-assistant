@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { VoiceController, voiceConversationOptions, voiceAgentPreviewOptions } from '../lib/controller.js'
+import { VoiceController, selectVoiceRoute, voiceConversationOptions, voiceAgentPreviewOptions } from '../lib/controller.js'
 import { buildBoundedContext } from '../lib/index.js'
 
 function harness(initial = 'base') {
@@ -149,6 +149,20 @@ test('the voice preview opens a full-duplex session on the selected model and vo
   assert.deepEqual(voiceAgentPreviewOptions({ ...base, recognitionProvider: 'openai-realtime', openaiRealtimeModel: 'openai/gpt-realtime', openaiRealtimeVoice: 'cedar' }), {
     routeId: 'openai/gpt-realtime', profileId: 'session-assistant-preview-openai-cedar',
   })
+})
+
+test('an empty configured route selects the first callable model for both conversations and previews', () => {
+  const settings = { recognitionProvider: 'doubao-realtime', recognitionLang: 'zh-CN', openaiRealtimeModel: '', openaiRealtimeVoice: 'marin', doubaoRealtimeModel: '', openaiContextMode: 'recent', autoSpeak: false, autoSpeakMode: 'final', voiceName: '', rate: 1, wakeWord: '你好助手' }
+  const models = [
+    { id: 'doubao/unavailable', protocol: 'doubao-realtime-duplex', available: false },
+    { id: 'openai/available', protocol: 'openai-webrtc', available: true },
+    { id: 'doubao/available', protocol: 'doubao-realtime-duplex', available: true },
+  ]
+  const routeId = selectVoiceRoute(settings, models)
+  assert.equal(routeId, 'doubao/available')
+  assert.equal(voiceConversationOptions(settings, 'ctx', routeId).routeId, 'doubao/available')
+  assert.equal(voiceAgentPreviewOptions(settings, routeId).routeId, 'doubao/available')
+  assert.equal(selectVoiceRoute({ ...settings, doubaoRealtimeModel: 'doubao/pinned' }, models), 'doubao/pinned')
 })
 
 test('observeSession surfaces primary-Agent questions and announces replies after submission', async () => {

@@ -449,11 +449,22 @@ export class VoiceController {
   }
 }
 
-export function voiceConversationOptions(settings: SessionAssistantSettings, context: string) {
+export interface VoiceRouteLike { readonly id: string; readonly protocol: string; readonly available?: boolean }
+
+/** Resolve the configured route, or the first callable route for the selected Realtime protocol. */
+export function selectVoiceRoute(settings: SessionAssistantSettings, models: readonly VoiceRouteLike[]): string {
+  if (settings.recognitionProvider === 'browser') return ''
+  const configured = settings.recognitionProvider === 'openai-realtime' ? settings.openaiRealtimeModel : settings.doubaoRealtimeModel
+  if (configured) return configured
+  const protocol = settings.recognitionProvider === 'openai-realtime' ? 'openai-webrtc' : 'doubao-realtime-duplex'
+  return models.find(model => model.protocol === protocol && model.available !== false)?.id ?? ''
+}
+
+export function voiceConversationOptions(settings: SessionAssistantSettings, context: string, routeId = '') {
   const browser = settings.recognitionProvider === 'browser'
   const openai = settings.recognitionProvider === 'openai-realtime'
   return {
-    routeId: browser ? '' : openai ? settings.openaiRealtimeModel : settings.doubaoRealtimeModel,
+    routeId: browser ? '' : routeId || (openai ? settings.openaiRealtimeModel : settings.doubaoRealtimeModel),
     profileId: openai ? `session-assistant-openai-${settings.openaiRealtimeVoice}` : 'session-assistant',
     context,
     language: settings.recognitionLang,
@@ -461,10 +472,10 @@ export function voiceConversationOptions(settings: SessionAssistantSettings, con
 }
 
 /** Open a full-duplex preview session using the actual selected Realtime model/voice. */
-export function voiceAgentPreviewOptions(settings: SessionAssistantSettings) {
+export function voiceAgentPreviewOptions(settings: SessionAssistantSettings, routeId = '') {
   const openai = settings.recognitionProvider === 'openai-realtime'
   return {
-    routeId: openai ? settings.openaiRealtimeModel : settings.doubaoRealtimeModel,
+    routeId: routeId || (openai ? settings.openaiRealtimeModel : settings.doubaoRealtimeModel),
     profileId: openai ? `session-assistant-preview-openai-${settings.openaiRealtimeVoice}` : 'session-assistant-preview',
   }
 }

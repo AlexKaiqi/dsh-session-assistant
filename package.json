@@ -113,8 +113,9 @@
     "clean": "node -e \"require('node:fs').rmSync('lib', { recursive: true, force: true })\"",
     "typecheck": "tsc --project tsconfig.json",
     "test": "node --test test/*.test.mjs",
+    "test:e2e:live": "DSH_SESSION_VOICE_E2E_LIVE=1 node --test test/live-product.e2e.mjs",
     "eval:check": "node evals/validate-suite.mjs",
-    "check": "npm run typecheck && npm run eval:check && npm run build && npm test"
+    "check": "npm run typecheck && npm run eval:check && npm run build && node --check test/live-product.e2e.mjs && npm test"
   },
   "types": "./lib/types/index.d.ts",
   "peerDependencies": {
@@ -149,7 +150,9 @@
     "react": "^18.2.0",
     "@types/node": "^24.13.3",
     "@types/react": "^18.3.1",
+    "playwright": "^1.62.1",
     "tsdown": "^0.22.14",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "ws": "^8.18.3"
   }
 }

@@ -49,7 +49,7 @@ test('client consumes provider-neutral voiceAgent and authoritative Session inpu
   assert.match(source, /ownerId: `session-assistant:\$\{sessionId\}`/)
   assert.match(source, /voiceAgent\.registerActions\(`session-assistant:\$\{sessionId\}`, tools\)/)
   assert.match(source, /function VoiceAgentPreview/)
-  assert.match(source, /voiceAgentPreviewOptions\(props\.settings\)/)
+  assert.match(source, /voiceAgentPreviewOptions\(props\.settings, selected!\.id\)/)
   assert.match(source, /handle\.current\?\.interrupt\(\)/)
   assert.match(source, /function VoiceWave/)
   assert.match(source, /sa-wave-speak/)

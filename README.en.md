@@ -11,6 +11,7 @@ A Session-scoped product layer for discussing a request by voice, maintaining th
 - Client copy is registered in one Host locale namespace and switches live with the global Chinese/English preference; the Chinese section title is “会话助手”.
 - `dsh-realtime-voice` exposes one product capability: start a full-duplex voice conversation with an Agent. Provider protocols, browser media, interruption, and audio-input arbitration stay behind that boundary.
 - Each Session starts a `VoiceConversation` as `session-assistant:<sessionId>` and registers product actions with `voiceAgent.registerActions` under the same owner prefix. This plugin still owns every authorization gate; if the global Pet Assistant or another voice product owns the microphone, startup fails explicitly instead of capturing in parallel.
+- An empty Realtime route means automatic selection: both normal conversations and previews choose the first available route for the selected Provider protocol instead of passing an empty route to the unified voice runtime.
 - **Knowledge-curation delegation**: the voice model can call `organize_notes` — when the user asks to organize, save, or remember the discussion, the tool settles immediately (the model keeps speaking) while the draft and recent session increments are handed to the dedicated text-model curator agent (the personal-knowledge maintainer, via the `sessionAssistantSettings/curate` Remote). On completion the dock shows the outcome and it is announced aloud: current-work projection updated plus durable-knowledge proposals. The curator only proposes; confirmation stays on the knowledge-base boundary.
 - Session Assistant neither listens for nor emits pet events, and it does not own global standby, wake-word, or pet-personality behavior. Those capabilities belong to the independent Pet Assistant.
 
@@ -23,3 +24,5 @@ OpenAI and Doubao route/profile/voice choices remain settings, but this plugin c
 ```bash
 npm run check
 ```
+
+Run `npm run test:e2e:live` only after explicitly authorizing a billable Provider call. It sends generated speech through a browser virtual microphone, the unified `voiceAgent`, and the real Realtime Provider, then asserts that the actual Session Assistant draft executor updates the draft without submitting it.

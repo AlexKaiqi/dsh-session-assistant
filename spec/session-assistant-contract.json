@@ -1,9 +1,10 @@
 {
-  "version": 7,
+  "version": 8,
   "profileId": "session-assistant",
   "settingsNamespace": "session-assistant",
   "settingsRemote": "sessionAssistantSettings",
   "voiceService": "voiceAgent",
+  "routeSelection": "use the configured route or the first available route matching the selected Provider protocol for both normal conversations and previews",
   "audioInputOwner": "session-assistant:<sessionId>",
   "actionRegistryOwner": "session-assistant:<sessionId>",
   "actionExecution": "voiceAgent.registerActions: the voice Agent capability executes action requests, settles results through the control handoff (resolve before follow-up work), and emits action-result",
