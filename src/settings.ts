@@ -23,6 +23,7 @@ export const Config: z<SessionAssistantSettings> = z.object({
   autoSpeakMode: z.union(['final', 'all'] as const).description('主 Agent 回复朗读范围').default('final'),
   voiceName: z.string().description('朗读音色；留空自动选择').default(''),
   rate: z.number().min(0.5).max(2).description('朗读语速').default(1),
+  wakeWord: z.string().max(24).description('待机唤醒词；留空禁用待机唤醒').default('你好助手'),
 })
 
 export function registerSessionAssistantSettings(ctx: Context, base: Partial<SessionAssistantSettings>): SettingsScope<SessionAssistantSettings> {

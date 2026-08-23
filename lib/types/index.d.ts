@@ -12,7 +12,6 @@ export { buildBoundedContext } from './client/context.ts';
 export declare const name = "dsh-session-assistant";
 export declare const inject: string[];
 export declare function realtimeEditorInstructions(context?: string): string;
-export declare function realtimePreviewInstructions(sample?: string): string;
 export declare function openAIProfileId(voice: string): string;
 export declare function sessionProfile({ id, openaiVoice }?: {
     id?: string;
@@ -42,7 +41,7 @@ export declare function previewProfile({ id, openaiVoice }?: {
     openaiVoice?: string;
 }): {
     id: string;
-    instructions: typeof realtimePreviewInstructions;
+    instructions: typeof realtimeEditorInstructions;
     tools: never[];
     voice: {
         openai: string;

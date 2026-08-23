@@ -1,6 +1,6 @@
 import type { ContextMode } from '../settings.ts'
 
-interface SessionSnapshotLike { readonly chat?: { readonly order?: readonly string[]; readonly nodes?: Map<string, unknown> } }
+export interface SessionSnapshotLike { readonly chat?: { readonly order?: readonly string[]; readonly nodes?: Map<string, unknown> } }
 
 function blockText(value: unknown): string {
   if (!Array.isArray(value)) return ''
@@ -46,4 +46,63 @@ export function messageText(session: SessionSnapshotLike, messageId: string): st
     if (node.data?.messageId === messageId) return blockText(node.data.blocks ?? node.data.content).trim().slice(0, 12_000)
   }
   return ''
+}
+
+/** One pending human-in-the-loop question asked by the primary Agent. */
+export interface PendingQuestion { readonly callId: string; readonly text: string }
+
+function nodeEntries(session: SessionSnapshotLike): { kind?: string; visibility?: string; data?: { blocks?: unknown; status?: string } }[] {
+  const nodes = session.chat?.nodes
+  if (!nodes) return []
+  const entries: { kind?: string; visibility?: string; data?: { blocks?: unknown; status?: string } }[] = []
+  for (const value of nodes.values()) entries.push(value as { kind?: string; visibility?: string; data?: { blocks?: unknown; status?: string } })
+  return entries
+}
+
+function questionText(argumentsRaw: unknown): string {
+  if (typeof argumentsRaw !== 'string') return ''
+  try {
+    const parsed: unknown = JSON.parse(argumentsRaw)
+    const questions = (parsed as { questions?: unknown })?.questions
+    if (!Array.isArray(questions)) return ''
+    return questions.map(entry => {
+      const question = entry as { question?: unknown; options?: unknown }
+      const stem = typeof question.question === 'string' ? question.question : ''
+      const options = Array.isArray(question.options) && question.options.length
+        ? `（选项：${question.options.map(option => (option as { label?: unknown })?.label).filter(label => typeof label === 'string').join(' / ')}）`
+        : ''
+      return `${stem}${options}`.trim()
+    }).filter(Boolean).join(' ')
+  } catch { return '' }
+}
+
+/** Find every `ask_user_question` tool call in the session snapshot with its readable text. */
+export function questionsInSession(session: SessionSnapshotLike): PendingQuestion[] {
+  const questions: PendingQuestion[] = []
+  for (const node of nodeEntries(session)) {
+    if (node.kind !== 'assistant-step' || node.visibility === 'hidden') continue
+    const blocks = node.data?.blocks
+    if (!Array.isArray(blocks)) continue
+    for (const block of blocks) {
+      // Snapshot blocks are UI-classified: { kind: 'tool-call', callId, name, argsRaw }.
+      // Raw event blocks use { type: 'tool-call', id, name, arguments }.
+      const candidate = block as { kind?: unknown; type?: unknown; name?: unknown; callId?: unknown; id?: unknown; arguments?: unknown; argsRaw?: unknown }
+      if ((candidate?.kind ?? candidate?.type) !== 'tool-call' || candidate.name !== 'ask_user_question') continue
+      const callId = typeof candidate.callId === 'string' ? candidate.callId : typeof candidate.id === 'string' ? candidate.id : ''
+      const text = questionText(candidate.arguments ?? candidate.argsRaw)
+      if (callId && text) questions.push({ callId, text })
+    }
+  }
+  return questions
+}
+
+/** Count finished assistant steps (primary-Agent turns) in the session snapshot. */
+export function countAssistantSteps(session: SessionSnapshotLike): number {
+  let count = 0
+  for (const node of nodeEntries(session)) {
+    if (node.kind !== 'assistant-step' || node.visibility === 'hidden') continue
+    if (node.data?.status === 'running') continue
+    count += 1
+  }
+  return count
 }

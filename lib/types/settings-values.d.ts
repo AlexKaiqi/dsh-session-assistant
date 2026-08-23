@@ -14,6 +14,8 @@ export interface SessionAssistantSettings {
     autoSpeakMode: AutoSpeakMode;
     voiceName: string;
     rate: number;
+    /** Wake word that reactivates the voice assistant from standby; empty disables standby wake-up. */
+    wakeWord: string;
 }
 export declare const OPENAI_REALTIME_VOICES: readonly [{
     readonly id: "marin";

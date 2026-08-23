@@ -51,6 +51,23 @@ export declare const END_VOICE_SESSION_TOOL: {
         properties: {};
     };
 };
+export declare const ORGANIZE_NOTES_TOOL: {
+    type: string;
+    name: string;
+    strict: boolean;
+    description: string;
+    parameters: {
+        type: string;
+        additionalProperties: boolean;
+        properties: {
+            instruction: {
+                type: string;
+                description: string;
+            };
+        };
+        required: never[];
+    };
+};
 export declare const SESSION_ASSISTANT_TOOLS: {
     type: string;
     name: string;
@@ -72,5 +89,6 @@ export declare const SESSION_ASSISTANT_TOOL_OUTPUT: {
     end_voice_session: {
         required: never[];
     };
+    organize_notes: {};
 };
 //# sourceMappingURL=tool-surface.d.ts.map

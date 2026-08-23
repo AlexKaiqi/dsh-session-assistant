@@ -1,16 +1,34 @@
 {
-  "version": 2,
+  "version": 6,
   "profileId": "session-assistant",
   "settingsNamespace": "session-assistant",
   "settingsRemote": "sessionAssistantSettings",
   "voiceService": "realtimeVoice",
+  "audioInputOwner": "session-assistant:<sessionId>",
+  "toolRegistryOwner": "session-assistant:<sessionId>",
+  "toolExecution": "realtimeVoice.registerTools: the realtime runtime executes tool events, settles results through the control handoff (resolve before follow-up work), and emits tool-result",
+  "curation": {
+    "tool": "organize_notes",
+    "executor": "knowledge-curator agent (personal-knowledge maintainer) via the sessionAssistantSettings/curate Remote; the tool result settles immediately, completion is announced separately",
+    "boundary": "the curator reads session increments plus the draft and the voice discussion and proposes durable knowledge only; confirmation stays on the knowledge-base boundary; only the discussion delta since the last successful curation is sent, and the outcome is re-injected into the voice-session context"
+  },
   "slots": [
     "conversation.input.right",
     "conversation.input.dock",
     "conversation.chat.assistant-actions",
     "settings.section"
   ],
-  "tools": ["update_working_draft", "submit_to_agent", "end_voice_session"],
+  "scope": "current-session",
+  "activationOwner": "dsh-session-assistant",
+  "activationSurface": "conversation.input.right",
+  "statusSurface": "conversation.input.dock",
+  "petEventIntegration": false,
+  "tools": [
+    "update_working_draft",
+    "submit_to_agent",
+    "end_voice_session",
+    "organize_notes"
+  ],
   "draftMutation": "inputActions.setDraft",
   "submission": "inputActions.submit",
   "executionBoundary": "primary-agent-only"

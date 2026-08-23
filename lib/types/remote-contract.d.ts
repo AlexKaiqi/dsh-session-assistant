@@ -121,5 +121,44 @@ export declare function sessionAssistantRemoteDescriptors(): ({
         line: number;
         column: number;
     };
+} | {
+    id: string;
+    service: string;
+    namespace: string;
+    method: string;
+    invocation: {
+        kind: "direct";
+    };
+    parameters: {
+        name: string;
+        wire: "request";
+        source: "json";
+        codec: {
+            mode: "strict";
+            typeSymbol: string;
+            schema: z.ZodObject<{
+                sessionId: z.ZodString;
+                cwd: z.ZodOptional<z.ZodString>;
+                instruction: z.ZodOptional<z.ZodString>;
+                extra: z.ZodOptional<z.ZodString>;
+            }, z.core.$strict>;
+        };
+    }[];
+    result: {
+        mode: "strict";
+        typeSymbol: string;
+        schema: z.ZodObject<{
+            available: z.ZodBoolean;
+            ok: z.ZodBoolean;
+            proposals: z.ZodArray<z.ZodString>;
+            currentUpdated: z.ZodBoolean;
+            error: z.ZodOptional<z.ZodString>;
+        }, z.core.$strict>;
+    };
+    sourceLocation: {
+        file: string;
+        line: number;
+        column: number;
+    };
 })[];
 //# sourceMappingURL=remote-contract.d.ts.map

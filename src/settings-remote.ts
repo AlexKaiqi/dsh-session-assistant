@@ -27,8 +27,27 @@ export interface SessionAssistantContextView {
   readonly sources: readonly string[]
 }
 
+export interface CurateKnowledgeRequest {
+  readonly sessionId: string
+  readonly cwd?: string
+  readonly instruction?: string
+  readonly extra?: string
+}
+
+export interface CuratorView {
+  readonly available: boolean
+  readonly ok: boolean
+  readonly proposals: readonly string[]
+  readonly currentUpdated: boolean
+  readonly error?: string
+}
+
 interface PersonalKnowledgeLike {
   project(options: { query?: string; sessionId?: string; cwd?: string; maxChars?: number }): Promise<{ text?: string; sources?: readonly string[] }> | { text?: string; sources?: readonly string[] }
+}
+
+interface KnowledgeCuratorLike {
+  curate(sessionId: string, options: { cwd?: string; instruction?: string; extra?: string; signal?: AbortSignal }): Promise<{ current?: unknown; proposals?: readonly unknown[]; skipped?: boolean; reason?: string }>
 }
 
 declare module '@deepseek-ai/cordis' {
@@ -67,6 +86,40 @@ export class SessionAssistantSettingsRemote extends TypertRemoteService {
       available: true,
       text: typeof projection.text === 'string' ? projection.text.slice(0, 12_000) : '',
       sources: Array.isArray(projection.sources) ? projection.sources.map(String).slice(0, 40) : [],
+    }
+  }
+
+  /**
+   * Delegate knowledge curation to the dedicated text-model curator agent
+   * (personal-knowledge maintainer). Honest absence when the knowledge base
+   * is not installed; failures are returned as ok:false so the voice product
+   * can relay the reason instead of leaving the user waiting.
+   */
+  @Remote('curate')
+  async curate(request: CurateKnowledgeRequest): Promise<CuratorView> {
+    const curator = this.ctx.get('personalKnowledgeMaintainer') as KnowledgeCuratorLike | undefined
+    if (curator === undefined) return { available: false, ok: false, proposals: [], currentUpdated: false }
+    try {
+      const result = await curator.curate(String(request.sessionId || '').slice(0, 160), {
+        cwd: String(request.cwd || '').slice(0, 2_000),
+        instruction: String(request.instruction || '').slice(0, 2_000),
+        extra: String(request.extra || '').slice(0, 12_000),
+      })
+      return {
+        available: true,
+        ok: result?.skipped !== true,
+        proposals: Array.isArray(result?.proposals) ? result.proposals.map(String).slice(0, 20) : [],
+        currentUpdated: result?.current !== undefined && result?.current !== null,
+        ...(result?.skipped ? { error: `Knowledge curation skipped: ${String(result.reason || 'unknown')}` } : {}),
+      }
+    } catch (error: unknown) {
+      return {
+        available: true,
+        ok: false,
+        proposals: [],
+        currentUpdated: false,
+        error: error instanceof Error ? error.message : String(error),
+      }
     }
   }
 

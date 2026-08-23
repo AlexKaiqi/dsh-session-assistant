@@ -1,6 +1,6 @@
 {
   "name": "dsh-session-assistant",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Session-scoped full-duplex voice assistant with tool-controlled drafting and Agent submission for DeepSeek Harness.",
   "type": "module",
   "main": "./lib/index.js",

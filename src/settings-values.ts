@@ -15,6 +15,8 @@ export interface SessionAssistantSettings {
   autoSpeakMode: AutoSpeakMode
   voiceName: string
   rate: number
+  /** Wake word that reactivates the voice assistant from standby; empty disables standby wake-up. */
+  wakeWord: string
 }
 
 export const OPENAI_REALTIME_VOICES = [
@@ -42,6 +44,7 @@ export const DEFAULT_SETTINGS: SessionAssistantSettings = {
   autoSpeakMode: 'final',
   voiceName: '',
   rate: 1,
+  wakeWord: '你好助手',
 }
 
 export const DECLARED_SETTINGS_FIELDS = Object.freeze(Object.keys(DEFAULT_SETTINGS) as (keyof SessionAssistantSettings)[])
@@ -67,5 +70,6 @@ export function normalizeSettings(input: unknown): SessionAssistantSettings {
     autoSpeakMode: speakMode === 'all' || speakMode === 'final' ? speakMode : DEFAULT_SETTINGS.autoSpeakMode,
     voiceName: typeof source.voiceName === 'string' ? source.voiceName : '',
     rate: Number.isFinite(rate) ? Math.min(2, Math.max(0.5, rate)) : DEFAULT_SETTINGS.rate,
+    wakeWord: typeof source.wakeWord === 'string' && source.wakeWord.length <= 24 ? source.wakeWord : DEFAULT_SETTINGS.wakeWord,
   }
 }

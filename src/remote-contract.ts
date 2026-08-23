@@ -25,6 +25,21 @@ const contextViewSchema = z.object({
   sources: z.array(z.string()),
 }).strict()
 
+const curateRequestSchema = z.object({
+  sessionId: z.string(),
+  cwd: z.string().optional(),
+  instruction: z.string().optional(),
+  extra: z.string().optional(),
+}).strict()
+
+const curatorViewSchema = z.object({
+  available: z.boolean(),
+  ok: z.boolean(),
+  proposals: z.array(z.string()),
+  currentUpdated: z.boolean(),
+  error: z.string().optional(),
+}).strict()
+
 export function sessionAssistantRemoteDescriptors() {
   return [
     {
@@ -55,6 +70,17 @@ export function sessionAssistantRemoteDescriptors() {
       }],
       result: { mode: 'strict' as const, typeSymbol: 'dsh-session-assistant#SessionAssistantContextView', schema: contextViewSchema },
       sourceLocation: { file: 'src/settings-remote.ts', line: 47, column: 3 },
+    },
+    {
+      id: 'dsh-session-assistant#sessionAssistantSettings/curate',
+      service: 'sessionAssistantSettings', namespace: 'sessionAssistantSettings', method: 'curate',
+      invocation: { kind: 'direct' as const },
+      parameters: [{
+        name: 'request', wire: 'request' as const, source: 'json' as const,
+        codec: { mode: 'strict' as const, typeSymbol: 'dsh-session-assistant#CurateKnowledgeRequest', schema: curateRequestSchema },
+      }],
+      result: { mode: 'strict' as const, typeSymbol: 'dsh-session-assistant#CuratorView', schema: curatorViewSchema },
+      sourceLocation: { file: 'src/settings-remote.ts', line: 53, column: 3 },
     },
   ]
 }

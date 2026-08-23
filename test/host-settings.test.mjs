@@ -14,11 +14,13 @@ test('model contract keeps the voice role bounded and exposes exact tool/result 
     'update_working_draft',
     'submit_to_agent',
     'end_voice_session',
+    'organize_notes',
   ])
   assert.deepEqual(mod.SESSION_ASSISTANT_TOOL_OUTPUT, {
     update_working_draft: { required: ['draft', 'summary', 'status'] },
     submit_to_agent: { required: ['draft'] },
     end_voice_session: { required: [] },
+    organize_notes: {},
   })
 })
 
@@ -102,4 +104,36 @@ test('settings Remote projects optional Personal Knowledge with bounded inputs a
 
   remote.ctx = { get() { return undefined } }
   assert.deepEqual(await remote.context({}), { available: false, text: '', sources: [] })
+})
+
+test('settings Remote curate maps the knowledge-curator result to the CuratorView contract', async () => {
+  const calls = []
+  const Remote = mod.SessionAssistantSettingsRemote
+  const remote = Object.create(Remote.prototype)
+  remote.ctx = {
+    get(name) {
+      if (name !== 'personalKnowledgeMaintainer') return undefined
+      return {
+        async curate(sessionId, options) {
+          calls.push({ sessionId, options })
+          return { skipped: false, current: { path: '.pkb/current.md' }, proposals: ['p1', 'p2'], source: 'session:s1' }
+        },
+      }
+    },
+  }
+  const view = await remote.curate({ sessionId: 's1', cwd: '/ws', instruction: '整理', extra: '讨论' })
+  assert.deepEqual(view, { available: true, ok: true, proposals: ['p1', 'p2'], currentUpdated: true })
+  assert.deepEqual(calls[0], { sessionId: 's1', options: { cwd: '/ws', instruction: '整理', extra: '讨论' } })
+
+  // A skipped pass is honest failure with the reason.
+  remote.ctx.get = name => name === 'personalKnowledgeMaintainer' ? { curate: async () => ({ skipped: true, reason: 'curate-cooldown' }) } : undefined
+  assert.deepEqual(await remote.curate({ sessionId: 's1' }), { available: true, ok: false, proposals: [], currentUpdated: false, error: 'Knowledge curation skipped: curate-cooldown' })
+
+  // A throwing curator never leaks: ok:false with the message.
+  remote.ctx.get = name => name === 'personalKnowledgeMaintainer' ? { curate: async () => { throw new Error('upstream failed') } } : undefined
+  assert.deepEqual(await remote.curate({ sessionId: 's1' }), { available: true, ok: false, proposals: [], currentUpdated: false, error: 'upstream failed' })
+
+  // Honest absence when the knowledge base is not installed.
+  remote.ctx = { get() { return undefined } }
+  assert.deepEqual(await remote.curate({ sessionId: 's1' }), { available: false, ok: false, proposals: [], currentUpdated: false })
 })

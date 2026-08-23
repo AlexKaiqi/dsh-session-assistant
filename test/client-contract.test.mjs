@@ -6,9 +6,13 @@ const source = await readFile(new URL('../src/client/index.ts', import.meta.url)
 const controller = await readFile(new URL('../src/client/controller.ts', import.meta.url), 'utf8')
 const locales = await readFile(new URL('../src/client/locales.ts', import.meta.url), 'utf8')
 
-test('client registers exactly the four required product Slots and mounts strict Remote', () => {
+test('client registers exactly the four current-Session product Slots', () => {
   const names = [...source.matchAll(/ctx\.slots\.inject\('([^']+)'/g)].map(match => match[1])
   assert.deepEqual(names, ['conversation.input.right', 'conversation.input.dock', 'conversation.chat.assistant-actions', 'settings.section'])
+  assert.match(source, /id: 'session-assistant-microphone'/)
+  assert.match(source, /id: 'session-assistant-status'/)
+  assert.match(source, /function MicControl/)
+  assert.match(source, /function VoiceDock/)
   assert.match(source, /ctx\.remote\.\$mount\(sessionAssistantRemote\)/)
   assert.match(source, /ctx\.get\('remote\.sessionAssistantSettings'\)/)
   assert.match(source, /remote\.describe\(\)/)
@@ -31,7 +35,7 @@ test('client UI uses one typed locale namespace for every product Slot', () => {
 })
 
 test('client consumes provider-neutral realtimeVoice and authoritative Session input actions', () => {
-  for (const member of ['capabilities', 'models', 'open', 'recognize', 'readAloud']) assert.match(source, new RegExp(`${member}\\(`))
+  for (const member of ['capabilities', 'models', 'open', 'recognize', 'readAloud', 'registerTools']) assert.match(source, new RegExp(`${member}\\(`))
   for (const member of ['subscribe', 'updateContext', 'resolveTool', 'interrupt', 'close']) assert.match(controller, new RegExp(`${member}\\(`))
   assert.match(controller, /inputActions\.setDraft\(draft\)/)
   assert.match(controller, /inputActions\.submit\(\)/)
@@ -40,17 +44,25 @@ test('client consumes provider-neutral realtimeVoice and authoritative Session i
   assert.match(source, /getInput: \(\) => input\.current/)
   assert.match(source, /buildBoundedContext\(session\.current, nextDraft/)
   assert.match(source, /remote\.context\(/)
-  assert.match(source, /dsh-pet-assistant:activate/)
-  assert.match(source, /dsh-pet-assistant:state/)
-  assert.match(source, /removeEventListener\('dsh-pet-assistant:activate'/)
-  assert.match(source, /function VoicePreview/)
+  assert.doesNotMatch(source, /dsh-pet-assistant:/)
+  assert.match(source, /active \? controller\.stop\(\) : controller\.start\(\)/)
+  assert.match(source, /ownerId: `session-assistant:\$\{sessionId\}`/)
+  assert.match(source, /realtimeVoice\.registerTools\(`session-assistant:\$\{sessionId\}`, tools\)/)
   assert.match(source, /function RealtimeVoicePreview/)
-  assert.match(source, /readAloudPreviewOptions\(props\.settings\)/)
   assert.match(source, /realtimeVoicePreviewOptions\(props\.settings\)/)
-  assert.match(controller, /outputOnly/)
   assert.match(source, /handle\.current\?\.interrupt\(\)/)
-  assert.match(source, /previewUsingCurrent/)
+  assert.match(source, /function VoiceWave/)
+  assert.match(source, /sa-wave-speak/)
   assert.doesNotMatch(source, /open: \(\) => \{[\s\S]{0,500}props\.use(Input|Session)/)
+  // Tool execution moved to the realtime runtime: the controller registers
+  // executors and settles results through the control handoff, never by
+  // applying tools itself.
+  assert.doesNotMatch(controller, /applyTool/)
+  assert.match(controller, /executeTool\(name: ToolName, args: unknown, control: ToolControl\)/)
+  // Knowledge curation is delegated to the dedicated curator agent.
+  assert.match(controller, /organizeNotes\(parsed, control\)/)
+  assert.match(source, /remote\.curate\(request\)/)
+  assert.match(controller, /curate\(\{ sessionId: this\.deps\.sessionId/)
 })
 
 test('session-assistant contains no provider transport or DOM implementation strings', async () => {

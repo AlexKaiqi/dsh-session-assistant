@@ -124,6 +124,45 @@ export declare const TYPERT: {
             line: number;
             column: number;
         };
+    } | {
+        id: string;
+        service: string;
+        namespace: string;
+        method: string;
+        invocation: {
+            kind: "direct";
+        };
+        parameters: {
+            name: string;
+            wire: "request";
+            source: "json";
+            codec: {
+                mode: "strict";
+                typeSymbol: string;
+                schema: import("zod").ZodObject<{
+                    sessionId: import("zod").ZodString;
+                    cwd: import("zod").ZodOptional<import("zod").ZodString>;
+                    instruction: import("zod").ZodOptional<import("zod").ZodString>;
+                    extra: import("zod").ZodOptional<import("zod").ZodString>;
+                }, import("zod/v4/core").$strict>;
+            };
+        }[];
+        result: {
+            mode: "strict";
+            typeSymbol: string;
+            schema: import("zod").ZodObject<{
+                available: import("zod").ZodBoolean;
+                ok: import("zod").ZodBoolean;
+                proposals: import("zod").ZodArray<import("zod").ZodString>;
+                currentUpdated: import("zod").ZodBoolean;
+                error: import("zod").ZodOptional<import("zod").ZodString>;
+            }, import("zod/v4/core").$strict>;
+        };
+        sourceLocation: {
+            file: string;
+            line: number;
+            column: number;
+        };
     })[];
     model: {
         services: {

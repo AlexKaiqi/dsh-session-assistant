@@ -12,6 +12,40 @@ export interface ToolEvent {
     name: string;
     arguments?: unknown;
 }
+export type ToolName = 'update_working_draft' | 'submit_to_agent' | 'end_voice_session' | 'organize_notes';
+export interface CurateRequest {
+    readonly sessionId: string;
+    readonly cwd?: string;
+    readonly instruction?: string;
+    readonly extra?: string;
+}
+export interface CurateResult {
+    readonly available: boolean;
+    readonly ok: boolean;
+    readonly proposals: readonly string[];
+    readonly currentUpdated: boolean;
+    readonly error?: string;
+}
+/**
+ * Tool-control handoff from the runtime tool registry: the executor calls
+ * `resolve` to settle the tool result before running follow-up work (the
+ * model keeps speaking after the result is delivered). Returns whether the
+ * result was actually delivered; a closed session reports false.
+ */
+export interface ToolControl {
+    resolve(result: unknown, options?: {
+        continueResponse?: boolean;
+    }): boolean;
+}
+export interface ToolExecutor {
+    execute(args: unknown, control: ToolControl): unknown | Promise<unknown>;
+}
+export interface ToolExecutorMap {
+    update_working_draft: ToolExecutor;
+    submit_to_agent: ToolExecutor;
+    end_voice_session: ToolExecutor;
+    organize_notes: ToolExecutor;
+}
 export type VoiceEvent = {
     type: 'status';
     connected?: boolean;
@@ -46,11 +80,28 @@ export interface VoiceSessionHandle {
     close(): void | Promise<void>;
 }
 export interface ControllerState {
-    readonly status: 'idle' | 'opening' | 'active' | 'closed' | 'error';
+    readonly status: 'idle' | 'standby' | 'opening' | 'active' | 'closed' | 'error';
     readonly phase: string;
     readonly transcript: string;
     readonly draftStatus: 'drafting' | 'ready';
     readonly error?: string | undefined;
+    /** Stable transport-level error code (for example mic_not_found) kept separate from the display message. */
+    readonly errorCode?: string | undefined;
+    /** Set once submit_to_agent hands the draft to the primary Agent; cleared on the next start/stop. */
+    readonly submitNotice?: boolean | undefined;
+    /** The primary Agent is currently asking the human a question (human-in-the-loop). */
+    readonly question?: {
+        readonly callId: string;
+        readonly text: string;
+    } | undefined;
+    /** The primary Agent produced a new reply after the voice submission. */
+    readonly agentReply?: boolean | undefined;
+    /** Latest knowledge-curation outcome (organize_notes), announced when it lands. */
+    readonly curatorNotice?: {
+        readonly ok: boolean;
+        readonly proposals: number;
+        readonly error?: string;
+    } | undefined;
 }
 export interface ControllerDependencies {
     readonly sessionId: string;
@@ -59,7 +110,31 @@ export interface ControllerDependencies {
     readonly context: (draft?: string) => string | Promise<string>;
     readonly open: () => Promise<VoiceSessionHandle> | VoiceSessionHandle;
     readonly dictation?: boolean | (() => boolean);
+    /** Called by the UI whenever the current-session snapshot changes (detects primary-Agent questions and replies). */
+    readonly observeSession?: (snapshot: unknown) => void;
+    /** Read the latest current-session snapshot (for submission baseline tracking). */
+    readonly getSession?: () => unknown;
+    /** Standby wake-word listening (browser recognition); enter() returns false when unavailable. */
+    readonly standby?: {
+        enter(): boolean;
+        exit(): void;
+    };
+    /**
+     * Register this assistant's tool executors with the runtime tool registry
+     * (realtimeVoice.registerTools for this session's ownerId). The runtime
+     * executes tool events itself and settles the results (dual output); the
+     * returned disposer must run when the controller is disposed.
+     */
+    readonly registerTools: (tools: ToolExecutorMap) => () => void;
+    /**
+     * Delegate knowledge curation to the dedicated curator agent. Resolves
+     * immediately for the voice model; the curation result is announced when
+     * it lands. Undefined when no curator remote is available.
+     */
+    readonly curate?: (request: CurateRequest) => Promise<CurateResult>;
 }
+/** Diagnostic tracing for the tool/submit flow; harmless no-op when the console is unavailable. */
+export declare function saLog(detail: string, extra?: unknown): void;
 export declare class VoiceController {
     private readonly deps;
     private handle;
@@ -68,6 +143,14 @@ export declare class VoiceController {
     private lastApplied;
     private disposed;
     private generation;
+    /** Finished assistant-step count when the voice session opened (or when a submission landed). */
+    private stepBaseline;
+    /** Accumulated finalized voice-discussion transcript of the current session, kept for curation. */
+    private discussion;
+    /** Discussion snapshot at the last successful curation; only the delta after it is re-curated. */
+    private lastCuratedDiscussion;
+    private readonly seenQuestions;
+    private readonly disposeTools;
     private state;
     private readonly listeners;
     constructor(deps: ControllerDependencies);
@@ -78,9 +161,36 @@ export declare class VoiceController {
     stop(): Promise<void>;
     dispose(): Promise<void>;
     interrupt(): Promise<void>;
+    /** Enter wake-word standby: only the configured wake word (or the mic button) reactivates the assistant. */
+    enterStandby(): Promise<boolean>;
+    /** Leave standby without starting a voice session. */
+    exitStandby(): Promise<void>;
+    /** Standby consumes the exclusive audio-input lease; any active voice session must be closed first. */
+    get canEnterStandby(): boolean;
+    /**
+     * Observe the current-session snapshot (called by the UI on every session change):
+     * surfaces primary-Agent human-in-the-loop questions and reply completion in the
+     * status bar — no synthetic TTS announcements.
+     */
+    observeSession(snapshot: unknown): void;
     consume(event: VoiceEvent): Promise<void>;
+    private appendDiscussion;
     private appendDictation;
-    private applyTool;
+    /**
+     * Execute one registered tool through the runtime tool-control handoff.
+     * The runtime settles the result (control.resolve) and keeps the model
+     * speaking; this method keeps the product boundaries: draft mutation only
+     * through inputActions, submission only after explicit authorization, and
+     * best-effort context refresh that never blocks the tool flow.
+     */
+    executeTool(name: ToolName, args: unknown, control: ToolControl): Promise<void>;
+    /**
+     * Delegate knowledge curation to the dedicated text-model curator agent.
+     * The tool result is settled immediately (the model keeps speaking and the
+     * user is told curation started); the async curation outcome is published
+     * to the dock when it lands (no synthetic TTS).
+     */
+    private organizeNotes;
     private publish;
 }
 export declare function providerOpenOptions(settings: SessionAssistantSettings, context: string): {
@@ -90,20 +200,10 @@ export declare function providerOpenOptions(settings: SessionAssistantSettings, 
     context: string;
     language: import("../settings-values.ts").RecognitionLanguage;
 };
-/** Build the browser read-aloud sample from the unsaved Settings draft. */
-export declare function readAloudPreviewOptions(settings: SessionAssistantSettings): {
-    lang: import("../settings-values.ts").RecognitionLanguage;
-    rate: number;
-    voiceName?: string;
-    text: string;
-};
-/** Open one receive-only Provider response using the actual selected Realtime voice. */
+/** Open a full-duplex preview session using the actual selected Realtime model/voice. */
 export declare function realtimeVoicePreviewOptions(settings: SessionAssistantSettings): {
     protocol: string;
     routeId: string;
     profileId: string;
-    context: string;
-    outputOnly: boolean;
-    previewText: string;
 };
 //# sourceMappingURL=controller.d.ts.map
