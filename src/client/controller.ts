@@ -3,8 +3,8 @@ import { countAssistantSteps, questionsInSession, type SessionSnapshotLike } fro
 
 export interface InputStateLike { readonly draft: string }
 export interface InputActionsLike { setDraft(text: string): void; submit(): void }
-export interface ToolEvent { type: 'tool'; callId: string; name: string; arguments?: unknown }
-export type ToolName = 'update_working_draft' | 'submit_to_agent' | 'end_voice_session' | 'organize_notes'
+export interface ActionEvent { type: 'action'; callId: string; name: string; arguments?: unknown }
+export type ActionName = 'update_working_draft' | 'submit_to_agent' | 'end_voice_session' | 'organize_notes'
 
 export interface CurateRequest {
   readonly sessionId: string
@@ -22,40 +22,40 @@ export interface CurateResult {
 }
 
 /**
- * Tool-control handoff from the runtime tool registry: the executor calls
- * `resolve` to settle the tool result before running follow-up work (the
+ * Action-control handoff from the voice conversation: the executor calls
+ * `resolve` to settle the action result before running follow-up work (the
  * model keeps speaking after the result is delivered). Returns whether the
  * result was actually delivered; a closed session reports false.
  */
-export interface ToolControl {
+export interface ActionControl {
   resolve(result: unknown, options?: { continueResponse?: boolean }): boolean
 }
 
-export interface ToolExecutor {
-  execute(args: unknown, control: ToolControl): unknown | Promise<unknown>
+export interface ActionExecutor {
+  execute(args: unknown, control: ActionControl): unknown | Promise<unknown>
 }
 
-export interface ToolExecutorMap {
-  update_working_draft: ToolExecutor
-  submit_to_agent: ToolExecutor
-  end_voice_session: ToolExecutor
-  organize_notes: ToolExecutor
+export interface ActionExecutorMap {
+  update_working_draft: ActionExecutor
+  submit_to_agent: ActionExecutor
+  end_voice_session: ActionExecutor
+  organize_notes: ActionExecutor
 }
 export type VoiceEvent =
   | { type: 'status'; connected?: boolean; status: string }
   | { type: 'phase'; phase: string }
   | { type: 'transcript'; role?: 'input' | 'output'; source?: 'input' | 'output'; text: string; final?: boolean }
-  | ToolEvent
+  | ActionEvent
   | { type: 'interrupted' }
   | { type: 'error'; code?: string; message: string; recoverable?: boolean }
   | { type: 'closed'; reason?: string }
 
-export interface VoiceSessionHandle {
+export interface VoiceConversation {
   subscribe(listener: (event: VoiceEvent) => void): () => void
   updateContext(context: string): void | Promise<void>
-  resolveTool(callId: string, result: unknown, options?: { continueResponse?: boolean }): void | Promise<void>
+  resolveAction(callId: string, result: unknown, options?: { continueResponse?: boolean }): void | Promise<void>
   interrupt(): void | Promise<void>
-  close(): void | Promise<void>
+  end(): void | Promise<void>
 }
 
 export interface ControllerState {
@@ -81,7 +81,7 @@ export interface ControllerDependencies {
   readonly inputActions: InputActionsLike
   readonly getInput: () => InputStateLike
   readonly context: (draft?: string) => string | Promise<string>
-  readonly open: () => Promise<VoiceSessionHandle> | VoiceSessionHandle
+  readonly startConversation: () => Promise<VoiceConversation> | VoiceConversation
   readonly dictation?: boolean | (() => boolean)
   /** Called by the UI whenever the current-session snapshot changes (detects primary-Agent questions and replies). */
   readonly observeSession?: (snapshot: unknown) => void
@@ -90,12 +90,12 @@ export interface ControllerDependencies {
   /** Standby wake-word listening (browser recognition); enter() returns false when unavailable. */
   readonly standby?: { enter(): boolean; exit(): void }
   /**
-   * Register this assistant's tool executors with the runtime tool registry
-   * (realtimeVoice.registerTools for this session's ownerId). The runtime
-   * executes tool events itself and settles the results (dual output); the
+   * Register this assistant's action executors with the voice Agent runtime
+   * (voiceAgent.registerActions for this session's ownerId). The runtime
+   * executes action requests and settles the results (dual output); the
    * returned disposer must run when the controller is disposed.
    */
-  readonly registerTools: (tools: ToolExecutorMap) => () => void
+  readonly registerActions: (tools: ActionExecutorMap) => () => void
   /**
    * Delegate knowledge curation to the dedicated curator agent. Resolves
    * immediately for the voice model; the curation result is announced when
@@ -130,7 +130,7 @@ export function saLog(detail: string, extra?: unknown): void {
 }
 
 export class VoiceController {
-  private handle: VoiceSessionHandle | undefined
+  private handle: VoiceConversation | undefined
   private unsubscribe: (() => void) | undefined
   private baseline = ''
   private lastApplied = ''
@@ -148,9 +148,9 @@ export class VoiceController {
   private readonly listeners = new Set<() => void>()
 
   constructor(private readonly deps: ControllerDependencies) {
-    // Tool events are executed by the realtime runtime (tool registry): the
+    // Action requests are executed by the voice Agent runtime: the
     // controller only supplies executors and keeps its own state machine.
-    this.disposeTools = deps.registerTools({
+    this.disposeTools = deps.registerActions({
       update_working_draft: { execute: (args, control) => this.executeTool('update_working_draft', args, control) },
       submit_to_agent: { execute: (args, control) => this.executeTool('submit_to_agent', args, control) },
       end_voice_session: { execute: (args, control) => this.executeTool('end_voice_session', args, control) },
@@ -173,8 +173,8 @@ export class VoiceController {
     this.lastApplied = this.baseline
     this.publish({ status: 'opening', phase: 'connecting', transcript: '', error: undefined, errorCode: undefined, submitNotice: undefined, question: undefined, agentReply: undefined })
     try {
-      const handle = await this.deps.open()
-      if (this.disposed || generation !== this.generation) { await handle.close(); return }
+      const handle = await this.deps.startConversation()
+      if (this.disposed || generation !== this.generation) { await handle.end(); return }
       this.handle = handle
       this.unsubscribe = handle.subscribe(event => { void this.consume(event).catch(error => { if (!this.disposed) this.publish({ status: 'error', error: error instanceof Error ? error.message : String(error) }) }) })
       this.publish({ status: 'active' })
@@ -194,7 +194,7 @@ export class VoiceController {
     const handle = this.handle
     this.handle = undefined
     this.deps.standby?.exit()
-    if (handle !== undefined) await handle.close()
+    if (handle !== undefined) await handle.end()
     if (!this.disposed) this.publish({ status: 'idle', phase: 'idle', transcript: '', error: undefined, errorCode: undefined, submitNotice: undefined, question: undefined, agentReply: undefined })
   }
 
@@ -277,8 +277,8 @@ export class VoiceController {
       this.handle = undefined
       this.publish({ status: 'idle', phase: 'idle' })
     }
-    // Tool events are executed by the realtime runtime through the tool
-    // registry; the controller only observes the remaining voice events here.
+    // Action requests are executed by the voice Agent runtime; the controller
+    // only observes the remaining conversation events here.
   }
 
   private appendDiscussion(role: string, text: string): void {
@@ -302,13 +302,13 @@ export class VoiceController {
   }
 
   /**
-   * Execute one registered tool through the runtime tool-control handoff.
+   * Execute one registered action through the runtime action-control handoff.
    * The runtime settles the result (control.resolve) and keeps the model
    * speaking; this method keeps the product boundaries: draft mutation only
    * through inputActions, submission only after explicit authorization, and
    * best-effort context refresh that never blocks the tool flow.
    */
-  async executeTool(name: ToolName, args: unknown, control: ToolControl): Promise<void> {
+  async executeTool(name: ActionName, args: unknown, control: ActionControl): Promise<void> {
     // No active voice session (stopped or never started) and disposed
     // controllers must never mutate or submit the draft.
     if (this.disposed || this.handle === undefined) return
@@ -383,7 +383,7 @@ export class VoiceController {
    * user is told curation started); the async curation outcome is published
    * to the dock when it lands (no synthetic TTS).
    */
-  private async organizeNotes(parsed: Record<string, unknown>, control: ToolControl): Promise<void> {
+  private async organizeNotes(parsed: Record<string, unknown>, control: ActionControl): Promise<void> {
     if (!this.deps.curate) {
       control.resolve({ ok: false, error: 'Knowledge curation is unavailable (the knowledge base is not installed).' })
       return
@@ -449,11 +449,10 @@ export class VoiceController {
   }
 }
 
-export function providerOpenOptions(settings: SessionAssistantSettings, context: string) {
+export function voiceConversationOptions(settings: SessionAssistantSettings, context: string) {
   const browser = settings.recognitionProvider === 'browser'
   const openai = settings.recognitionProvider === 'openai-realtime'
   return {
-    protocol: browser ? 'browser-recognition' : openai ? 'openai-webrtc' : 'doubao-realtime-duplex',
     routeId: browser ? '' : openai ? settings.openaiRealtimeModel : settings.doubaoRealtimeModel,
     profileId: openai ? `session-assistant-openai-${settings.openaiRealtimeVoice}` : 'session-assistant',
     context,
@@ -462,10 +461,9 @@ export function providerOpenOptions(settings: SessionAssistantSettings, context:
 }
 
 /** Open a full-duplex preview session using the actual selected Realtime model/voice. */
-export function realtimeVoicePreviewOptions(settings: SessionAssistantSettings) {
+export function voiceAgentPreviewOptions(settings: SessionAssistantSettings) {
   const openai = settings.recognitionProvider === 'openai-realtime'
   return {
-    protocol: openai ? 'openai-webrtc' : 'doubao-realtime-duplex',
     routeId: openai ? settings.openaiRealtimeModel : settings.doubaoRealtimeModel,
     profileId: openai ? `session-assistant-preview-openai-${settings.openaiRealtimeVoice}` : 'session-assistant-preview',
   }

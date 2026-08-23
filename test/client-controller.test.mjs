@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { VoiceController, providerOpenOptions, realtimeVoicePreviewOptions } from '../lib/controller.js'
+import { VoiceController, voiceConversationOptions, voiceAgentPreviewOptions } from '../lib/controller.js'
 import { buildBoundedContext } from '../lib/index.js'
 
 function harness(initial = 'base') {
@@ -16,8 +16,8 @@ function harness(initial = 'base') {
   const handle = {
     subscribe(next) { listener = next; return () => { listener = undefined } },
     updateContext(value) { contexts.push(value) },
-    resolveTool(callId, result) { order.push(`handle-resolve:${callId}`) },
-    interrupt() {}, close() { closed++ },
+    resolveAction(callId, result) { order.push(`handle-resolve:${callId}`) },
+    interrupt() {}, end() { closed++ },
   }
   let executors
   let disposeCount = 0
@@ -26,10 +26,10 @@ function harness(initial = 'base') {
     inputActions: { setDraft(value) { draft = value }, submit() { submitted++; order.push('submit') } },
     getInput: () => ({ draft }),
     context: () => { if (failContext) { failContext = false; throw new Error('knowledge unavailable') } return `draft:${draft}` },
-    open: async () => handle,
-    // Runtime tool registry handoff: capture the executors and dispose count
-    // so tests drive the same path the realtime runtime uses.
-    registerTools: tools => { executors = tools; return () => { disposeCount++ } },
+    startConversation: async () => handle,
+    // Voice Agent action-registry handoff: capture the executors and dispose
+    // count so tests drive the same path the runtime uses.
+    registerActions: tools => { executors = tools; return () => { disposeCount++ } },
     // Dedicated curator agent delegation (async completion).
     curate: async request => { curateCalls.push(request); return curateResult },
   })
@@ -127,8 +127,8 @@ test('disposing the controller unregisters its tools from the runtime registry',
 })
 
 test('provider selection is data-only and bounded context excludes hidden/running nodes', () => {
-  assert.deepEqual(providerOpenOptions({ recognitionProvider: 'openai-realtime', recognitionLang: 'zh-CN', openaiRealtimeModel: 'route', openaiRealtimeVoice: 'cedar', doubaoRealtimeModel: '', openaiContextMode: 'recent', autoSpeak: false, autoSpeakMode: 'final', voiceName: '', rate: 1 }, 'ctx'), {
-    protocol: 'openai-webrtc', routeId: 'route', profileId: 'session-assistant-openai-cedar', context: 'ctx', language: 'zh-CN',
+  assert.deepEqual(voiceConversationOptions({ recognitionProvider: 'openai-realtime', recognitionLang: 'zh-CN', openaiRealtimeModel: 'route', openaiRealtimeVoice: 'cedar', doubaoRealtimeModel: '', openaiContextMode: 'recent', autoSpeak: false, autoSpeakMode: 'final', voiceName: '', rate: 1 }, 'ctx'), {
+    routeId: 'route', profileId: 'session-assistant-openai-cedar', context: 'ctx', language: 'zh-CN',
   })
   const nodes = new Map([
     ['visible', { kind: 'user', data: { content: [{ type: 'text', text: 'visible context' }] } }],
@@ -143,11 +143,11 @@ test('provider selection is data-only and bounded context excludes hidden/runnin
 
 test('the voice preview opens a full-duplex session on the selected model and voice', () => {
   const base = { recognitionProvider: 'browser', recognitionLang: 'zh-CN', openaiRealtimeModel: '', openaiRealtimeVoice: 'marin', doubaoRealtimeModel: '', openaiContextMode: 'recent', autoSpeak: false, autoSpeakMode: 'final', voiceName: 'Voice A', rate: 1.3 }
-  assert.deepEqual(realtimeVoicePreviewOptions({ ...base, recognitionProvider: 'doubao-realtime', doubaoRealtimeModel: 'doubao/voice-a' }), {
-    protocol: 'doubao-realtime-duplex', routeId: 'doubao/voice-a', profileId: 'session-assistant-preview',
+  assert.deepEqual(voiceAgentPreviewOptions({ ...base, recognitionProvider: 'doubao-realtime', doubaoRealtimeModel: 'doubao/voice-a' }), {
+    routeId: 'doubao/voice-a', profileId: 'session-assistant-preview',
   })
-  assert.deepEqual(realtimeVoicePreviewOptions({ ...base, recognitionProvider: 'openai-realtime', openaiRealtimeModel: 'openai/gpt-realtime', openaiRealtimeVoice: 'cedar' }), {
-    protocol: 'openai-webrtc', routeId: 'openai/gpt-realtime', profileId: 'session-assistant-preview-openai-cedar',
+  assert.deepEqual(voiceAgentPreviewOptions({ ...base, recognitionProvider: 'openai-realtime', openaiRealtimeModel: 'openai/gpt-realtime', openaiRealtimeVoice: 'cedar' }), {
+    routeId: 'openai/gpt-realtime', profileId: 'session-assistant-preview-openai-cedar',
   })
 })
 
@@ -186,11 +186,11 @@ test('standby enters and exits through the wake-word listener and never overlaps
     inputActions: { setDraft() {}, submit() {} },
     getInput: () => ({ draft: 'x' }),
     context: async () => '',
-    open: async () => ({
-      subscribe() { return () => {} }, updateContext() {}, resolveTool() {}, interrupt() {}, close() {},
+    startConversation: async () => ({
+      subscribe() { return () => {} }, updateContext() {}, resolveAction() {}, interrupt() {}, end() {},
     }),
     standby: { enter() { entered += 1; return true }, exit() { exited += 1 } },
-    registerTools: () => () => {},
+    registerActions: () => () => {},
   })
   assert.equal(controller.canEnterStandby, true)
   assert.equal(await controller.enterStandby(), true)
@@ -261,8 +261,8 @@ test('organize_notes with no curate dependency rejects the tool instead of hangi
     inputActions: { setDraft() {}, submit() {} },
     getInput: () => ({ draft: 'x' }),
     context: async () => '',
-    open: async () => ({ subscribe() { return () => {} }, updateContext() {}, resolveTool() {}, interrupt() {}, close() {} }),
-    registerTools: () => () => {},
+    startConversation: async () => ({ subscribe() { return () => {} }, updateContext() {}, resolveAction() {}, interrupt() {}, end() {} }),
+    registerActions: () => () => {},
   })
   await controller.start()
   const calls = []

@@ -34,9 +34,9 @@ test('client UI uses one typed locale namespace for every product Slot', () => {
   }
 })
 
-test('client consumes provider-neutral realtimeVoice and authoritative Session input actions', () => {
-  for (const member of ['capabilities', 'models', 'open', 'recognize', 'readAloud', 'registerTools']) assert.match(source, new RegExp(`${member}\\(`))
-  for (const member of ['subscribe', 'updateContext', 'resolveTool', 'interrupt', 'close']) assert.match(controller, new RegExp(`${member}\\(`))
+test('client consumes provider-neutral voiceAgent and authoritative Session input actions', () => {
+  for (const member of ['capabilities', 'models', 'startConversation', 'recognize', 'readAloud', 'registerActions']) assert.match(source, new RegExp(`${member}\\(`))
+  for (const member of ['subscribe', 'updateContext', 'resolveAction', 'interrupt', 'end']) assert.match(controller, new RegExp(`${member}\\(`))
   assert.match(controller, /inputActions\.setDraft\(draft\)/)
   assert.match(controller, /inputActions\.submit\(\)/)
   assert.match(source, /props\.messageId/)
@@ -47,18 +47,18 @@ test('client consumes provider-neutral realtimeVoice and authoritative Session i
   assert.doesNotMatch(source, /dsh-pet-assistant:/)
   assert.match(source, /active \? controller\.stop\(\) : controller\.start\(\)/)
   assert.match(source, /ownerId: `session-assistant:\$\{sessionId\}`/)
-  assert.match(source, /realtimeVoice\.registerTools\(`session-assistant:\$\{sessionId\}`, tools\)/)
-  assert.match(source, /function RealtimeVoicePreview/)
-  assert.match(source, /realtimeVoicePreviewOptions\(props\.settings\)/)
+  assert.match(source, /voiceAgent\.registerActions\(`session-assistant:\$\{sessionId\}`, tools\)/)
+  assert.match(source, /function VoiceAgentPreview/)
+  assert.match(source, /voiceAgentPreviewOptions\(props\.settings\)/)
   assert.match(source, /handle\.current\?\.interrupt\(\)/)
   assert.match(source, /function VoiceWave/)
   assert.match(source, /sa-wave-speak/)
-  assert.doesNotMatch(source, /open: \(\) => \{[\s\S]{0,500}props\.use(Input|Session)/)
-  // Tool execution moved to the realtime runtime: the controller registers
+  assert.doesNotMatch(source, /startConversation: \(\) => \{[\s\S]{0,500}props\.use(Input|Session)/)
+  // Action execution lives in the voice Agent runtime: the controller registers
   // executors and settles results through the control handoff, never by
   // applying tools itself.
   assert.doesNotMatch(controller, /applyTool/)
-  assert.match(controller, /executeTool\(name: ToolName, args: unknown, control: ToolControl\)/)
+  assert.match(controller, /executeTool\(name: ActionName, args: unknown, control: ActionControl\)/)
   // Knowledge curation is delegated to the dedicated curator agent.
   assert.match(controller, /organizeNotes\(parsed, control\)/)
   assert.match(source, /remote\.curate\(request\)/)
@@ -70,7 +70,7 @@ test('session-assistant contains no provider transport or DOM implementation str
   const forbidden = [
     'RTCPeerConnection', 'WebSocket', 'AudioContext', 'ScriptProcessor', 'SpeechRecognition', 'speechSynthesis',
     'MutationObserver', 'querySelector', '.closest(', 'KeyboardEvent', 'document.body', '/dsh-session-assistant/config',
-    'input_audio_buffer.', 'response.output_audio.', 'conversation.item.create', '/dsh-realtime-voice/',
+    'input_audio_buffer.', 'response.output_audio.', 'conversation.item.create', '/dsh-voice-agent/',
   ]
   for (const value of forbidden) for (const text of files) assert.equal(text.includes(value), false, `forbidden client implementation string: ${value}`)
 })

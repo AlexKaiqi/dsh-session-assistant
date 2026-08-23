@@ -1,12 +1,12 @@
 {
-  "version": 6,
+  "version": 7,
   "profileId": "session-assistant",
   "settingsNamespace": "session-assistant",
   "settingsRemote": "sessionAssistantSettings",
-  "voiceService": "realtimeVoice",
+  "voiceService": "voiceAgent",
   "audioInputOwner": "session-assistant:<sessionId>",
-  "toolRegistryOwner": "session-assistant:<sessionId>",
-  "toolExecution": "realtimeVoice.registerTools: the realtime runtime executes tool events, settles results through the control handoff (resolve before follow-up work), and emits tool-result",
+  "actionRegistryOwner": "session-assistant:<sessionId>",
+  "actionExecution": "voiceAgent.registerActions: the voice Agent capability executes action requests, settles results through the control handoff (resolve before follow-up work), and emits action-result",
   "curation": {
     "tool": "organize_notes",
     "executor": "knowledge-curator agent (personal-knowledge maintainer) via the sessionAssistantSettings/curate Remote; the tool result settles immediately, completion is announced separately",

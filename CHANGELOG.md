@@ -4,7 +4,7 @@
 
 - **讨论增量整理**：`organize_notes` 只把**上次成功整理之后的新讨论**交给整理 agent（成功才推进基线，失败自动全量重试）——长会话多次整理不再重复归纳同一段讨论，省 token 且提案更聚焦
 - **整理闭环完善**：语音会话的**讨论转写本身参与整理**（finalized transcript 累积，`organize_notes` 与草稿一起交给整理 agent——不再只整理草稿而丢失讨论）；整理完成后**结果回注语音会话上下文**（`[Curator notice]` 摘要，模型下次开口自然带出"N 条提案待确认"），语音会话结束后结果也不会丢
-- **工具执行下沉到语音运行时**：`dsh-realtime-voice` 升级为“传输 + 中性会话运行时”，新增 `realtimeVoice.registerTools(ownerPrefix, tools)`；语音模型的工具事件由运行时执行并回传（支持异步结果，模型可在结果等待期间继续说话——双输出），并发出标准化 `tool-result` 事件。Session Assistant 的 controller 不再自行解析工具事件，只以 `session-assistant:<sessionId>` owner 前缀注册四个执行器（草稿/提交/结束/整理），产品边界不变：草稿只经 `inputActions.setDraft`、提交只经 `inputActions.submit()`、授权门与并发/释放守卫全部保留
+- **语音能力抽象升级**：依赖由 `dsh-realtime-voice` 迁移到 `dsh-voice-agent`；产品通过 `voiceAgent.startConversation` 获得 `VoiceConversation`，Provider 协议留在运行时内部。模型动作由 `voiceAgent.registerActions` 执行和回传（支持异步双输出），并发出标准化 `action-result`。Session Assistant 仍以 `session-assistant:<sessionId>` 注册四个产品动作，并继续独占草稿、提交授权与并发守卫
 - **移除自动 TTS 播报**：主 Agent 提问与完成只以状态条文字提示，不再用浏览器合成语音（speechSynthesis）机械播报；手动“朗读本条回复”按钮保留
 - **待机 + 唤醒词**：空闲时麦克风旁出现月亮图标（无文字），点击进入待机；待机状态由麦克风颜色表达（琥珀色 + 右上角小圆点），只响应唤醒词（默认“你好助手”，设置页可改、留空禁用），命中即自动恢复语音会话；待机监听可被主动语音会话抢占
 - 新增 `docs/design.md` 设计哲学文档：为什么存在、价值、第一性原理、能力全景、边界、关键决策记录（含历史根因如豆包 `items` 数组、空草稿静默等）
@@ -18,7 +18,7 @@
 - 修复“发送后无反应且未提交”：空草稿的 `submit_to_agent` 之前会通过校验，但输入框对空草稿提交静默忽略，导致模型说“已提交”实际什么都没发；现在空/纯空白草稿直接以 `ok:false` 拒绝，并在提交成功后状态条显示“已提交给主 Agent”
 - 修复提交后语音静默卡死：`submit_to_agent` / `update_working_draft` 工具执行中任一异步步骤（如知识库投影 `remote.context`）失败时，不再被 `void consume` 静默吞掉导致模型一直等工具结果、提交丢失；现在会以 `ok:false` 回传工具结果并把错误显示在状态条，会话仍可继续使用
 - 建连与草稿 context 的知识库投影失败时降级为本地上下文，不再阻断语音会话启动或工具链路
-- 语音报错本地化：浏览器麦克风失败（找不到设备/权限被拒/被占用等）显示可读中文提示而非原始英文；`dsh-realtime-voice` 提供稳定错误码（`mic_not_found`、`mic_permission_denied`、`mic_unreadable`、`mic_aborted`、`audio_input_busy`），本插件映射为对应 locale 文案，未知错误仍回退原文
+- 语音报错本地化：浏览器麦克风失败（找不到设备/权限被拒/被占用等）显示可读中文提示而非原始英文；`dsh-voice-agent` 提供稳定错误码（`mic_not_found`、`mic_permission_denied`、`mic_unreadable`、`mic_aborted`、`audio_input_busy`），本插件映射为对应 locale 文案，未知错误仍回退原文
 - 输入栏语音按钮由文字“语音/结束”改为麦克风图标：录制中图标变红并脉冲呼吸，`title`/`aria-label` 与 `aria-pressed` 保留完整“开始/结束语音会话”语义；移除已无引用的 `startVoice`/`stopVoice` 文案键
 - 修正助手边界：恢复会话输入栏麦克风与状态条，并彻底移除宠物激活/状态事件；Session Assistant 只服务当前 Session
 - 设置页新增两条语音播放试听：receive-only Realtime 会话播放实际所选助手模型/音色且不申请麦克风权限；浏览器朗读试听使用当前未保存的语言、音色和语速；两者均支持停止、完成与错误反馈
@@ -27,7 +27,7 @@
 
 - Host 配置迁移到 DSH Settings `session-assistant` 命名空间，实时应用 composition base；旧 JSON 仅作一次性导入源且不再写回
 - 新增插件自有严格 Typert Remote，设置保存带 revision 防冲突；移除自定义 HTTP 配置协议
-- Client 重写为四个 Slot 组件，只消费 `realtimeVoice` 标准事件和 Session `inputActions`
+- Client 重写为四个 Slot 组件，只消费 `voiceAgent` 标准事件和 Session `inputActions`
 - 修复 Client bundle 将 `zod`、Schemastery 与 Host Settings 模块错误外置导致 Harness loader 加载失败；浏览器产物现在只请求已声明的 React 运行时
 - 移除 Session Assistant 内所有 Provider 媒体传输、DOM observer/selector、猜测提交按钮和页面 overlay
 - 新增 controller 生命周期、并发编辑、显式提交/结束、bounded context、messageId 朗读与禁止实现字符串测试

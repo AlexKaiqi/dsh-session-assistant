@@ -73,7 +73,7 @@
       ],
       "dependencies": [
         "dsh-multi-model-provider",
-        "dsh-realtime-voice",
+        "dsh-voice-agent",
         "@deepseek-ai/dsh-settings",
         "@deepseek-ai/dsh-api-remotes",
         "@deepseek-ai/dsh-client-locale",
@@ -88,7 +88,7 @@
     },
     "client": {
       "inject": [
-        "dsh-realtime-voice",
+        "dsh-voice-agent",
         "@deepseek-ai/dsh-api-remotes",
         "@deepseek-ai/dsh-client-locale",
         "@deepseek-ai/dsh-client-runtime",
@@ -129,7 +129,7 @@
     "@deepseek-ai/dsh-client-ui-slots": "^0.1.0-rc.6",
     "@deepseek-ai/schemastery": "^3.18.1",
     "dsh-multi-model-provider": "^0.1.0-rc.9",
-    "dsh-realtime-voice": "^0.1.0",
+    "dsh-voice-agent": "^0.3.0",
     "react": "^18.2.0"
   },
   "devDependencies": {
@@ -144,7 +144,8 @@
     "@deepseek-ai/dsh-client-ui-slots": "^0.1.0-rc.6",
     "@deepseek-ai/schemastery": "^3.18.1",
     "dsh-multi-model-provider": "file:../dsh-multi-model-provider",
-    "dsh-realtime-voice": "file:../dsh-realtime-voice",
+    "dsh-temporary-session": "link:../dsh-temporary-session/packages/plugin",
+    "dsh-voice-agent": "file:../dsh-voice-agent",
     "react": "^18.2.0",
     "@types/node": "^24.13.3",
     "@types/react": "^18.3.1",

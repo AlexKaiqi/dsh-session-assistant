@@ -50,10 +50,13 @@ importers:
         version: 18.3.31
       dsh-multi-model-provider:
         specifier: file:../dsh-multi-model-provider
-        version: file:../dsh-multi-model-provider(2a2a2327fc4d262f3d8e260a0965adcb)
-      dsh-realtime-voice:
-        specifier: file:../dsh-realtime-voice
-        version: file:../dsh-realtime-voice(@deepseek-ai/cordis@4.0.1)(dsh-multi-model-provider@file:../dsh-multi-model-provider(2a2a2327fc4d262f3d8e260a0965adcb))
+        version: file:../dsh-multi-model-provider(ad91edf860c541a34fe06784ec0bb9f0)
+      dsh-temporary-session:
+        specifier: link:../dsh-temporary-session/packages/plugin
+        version: link:../dsh-temporary-session/packages/plugin
+      dsh-voice-agent:
+        specifier: file:../dsh-voice-agent
+        version: file:../dsh-voice-agent(@deepseek-ai/cordis@4.0.1)(dsh-multi-model-provider@file:../dsh-multi-model-provider(ad91edf860c541a34fe06784ec0bb9f0))
       react:
         specifier: ^18.2.0
         version: 18.3.1
@@ -1323,10 +1326,11 @@ packages:
       '@deepseek-ai/dsh-system-prompt': ^0.1.0-rc.6
       '@deepseek-ai/dsh-tools': ^0.1.0-rc.6
       '@deepseek-ai/schemastery': ^3.18.1
+      dsh-temporary-session: ^0.1.0-rc.3
       react: ^18.2.0
 
-  dsh-realtime-voice@file:../dsh-realtime-voice:
-    resolution: {directory: ../dsh-realtime-voice, type: directory}
+  dsh-voice-agent@file:../dsh-voice-agent:
+    resolution: {directory: ../dsh-voice-agent, type: directory}
     engines: {node: '>=20'}
     peerDependencies:
       '@deepseek-ai/cordis': ^4.0.1
@@ -2906,7 +2910,7 @@ snapshots:
 
   defu@6.1.7: {}
 
-  dsh-multi-model-provider@file:../dsh-multi-model-provider(2a2a2327fc4d262f3d8e260a0965adcb):
+  dsh-multi-model-provider@file:../dsh-multi-model-provider(ad91edf860c541a34fe06784ec0bb9f0):
     dependencies:
       '@deepseek-ai/cordis': 4.0.1(@deepseek-ai/cordis-plugin-include@1.0.6)(@deepseek-ai/cordis-plugin-loader@1.0.2)
       '@deepseek-ai/dsh-agent': 0.1.0-rc.8(9bf9d4243f80ccefce5042bed5cd4c17)
@@ -2920,17 +2924,18 @@ snapshots:
       '@deepseek-ai/dsh-system-prompt': 0.1.0-rc.8(@deepseek-ai/cordis@4.0.1)(@deepseek-ai/dsh-invariants@0.1.0-rc.8(@deepseek-ai/cordis@4.0.1))(@deepseek-ai/dsh-llm@0.1.0-rc.8(@deepseek-ai/cordis@4.0.1)(@deepseek-ai/dsh-attachment@0.1.0-rc.8(@deepseek-ai/cordis@4.0.1)(@deepseek-ai/dsh-brand@0.1.0-rc.8(@deepseek-ai/cordis@4.0.1)(@deepseek-ai/dsh-invariants@0.1.0-rc.8(@deepseek-ai/cordis@4.0.1)))(@deepseek-ai/dsh-invariants@0.1.0-rc.8(@deepseek-ai/cordis@4.0.1)))(@deepseek-ai/dsh-brand@0.1.0-rc.8(@deepseek-ai/cordis@4.0.1)(@deepseek-ai/dsh-invariants@0.1.0-rc.8(@deepseek-ai/cordis@4.0.1)))(@deepseek-ai/dsh-invariants@0.1.0-rc.8(@deepseek-ai/cordis@4.0.1))(@deepseek-ai/dsh-timeout@0.1.0-rc.8(@deepseek-ai/cordis@4.0.1)(@deepseek-ai/dsh-invariants@0.1.0-rc.8(@deepseek-ai/cordis@4.0.1))))(@deepseek-ai/dsh-scope@0.1.0-rc.8(@deepseek-ai/cordis@4.0.1)(@deepseek-ai/dsh-invariants@0.1.0-rc.8(@deepseek-ai/cordis@4.0.1)))
       '@deepseek-ai/dsh-tools': 0.1.0-rc.8(ee1c62e0af5e3e6f815efcb4f6d5e721)
       '@deepseek-ai/schemastery': 3.18.1
+      dsh-temporary-session: link:../dsh-temporary-session/packages/plugin
       react: 18.3.1
       ws: 8.21.3
     transitivePeerDependencies:
       - bufferutil
       - utf-8-validate
 
-  dsh-realtime-voice@file:../dsh-realtime-voice(@deepseek-ai/cordis@4.0.1)(dsh-multi-model-provider@file:../dsh-multi-model-provider(2a2a2327fc4d262f3d8e260a0965adcb)):
+  dsh-voice-agent@file:../dsh-voice-agent(@deepseek-ai/cordis@4.0.1)(dsh-multi-model-provider@file:../dsh-multi-model-provider(ad91edf860c541a34fe06784ec0bb9f0)):
     dependencies:
       '@deepseek-ai/cordis': 4.0.1(@deepseek-ai/cordis-plugin-include@1.0.6)(@deepseek-ai/cordis-plugin-loader@1.0.2)
       '@deepseek-ai/schemastery': 3.18.1
-      dsh-multi-model-provider: file:../dsh-multi-model-provider(2a2a2327fc4d262f3d8e260a0965adcb)
+      dsh-multi-model-provider: file:../dsh-multi-model-provider(ad91edf860c541a34fe06784ec0bb9f0)
       ws: 8.21.3
     transitivePeerDependencies:
       - bufferutil

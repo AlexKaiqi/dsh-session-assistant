@@ -1,4 +1,5 @@
 node_modules/
+.node_modules-cloud-backup/
 *.tgz
 .chatvoice-dev/
 .DS_Store

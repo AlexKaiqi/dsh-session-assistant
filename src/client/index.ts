@@ -7,7 +7,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import sessionAssistantRemote from '../typert-remote.ts'
 import { DEFAULT_SETTINGS, OPENAI_REALTIME_VOICES, type SessionAssistantSettings } from '../settings-values.ts'
 import type { SessionAssistantSettingsView } from '../settings-remote.ts'
-import { VoiceController, providerOpenOptions, realtimeVoicePreviewOptions, saLog, type InputActionsLike, type InputStateLike, type ToolExecutorMap, type VoiceEvent, type VoiceSessionHandle } from './controller.ts'
+import { VoiceController, voiceConversationOptions, voiceAgentPreviewOptions, saLog, type InputActionsLike, type InputStateLike, type ActionExecutorMap, type VoiceEvent, type VoiceConversation } from './controller.ts'
 import { buildBoundedContext, messageText } from './context.ts'
 import { dictionaries, NS, phaseLabel, type SessionAssistantLocaleKey, type SessionAssistantTranslate } from './locales.ts'
 
@@ -22,10 +22,10 @@ interface VoiceModel { readonly id: string; readonly protocol: string; readonly 
 interface BrowserVoice { readonly id: string; readonly name: string; readonly lang: string; readonly default: boolean }
 interface RecognitionHandle { close(): void }
 interface ReadAloudHandle { interrupt(): void; close(): void }
-interface RealtimeVoice {
+interface VoiceAgent {
   capabilities(): { readAloud?: boolean; voices?: readonly BrowserVoice[]; recognition?: boolean }
   models(): Promise<readonly VoiceModel[]>
-  open(options: Record<string, unknown>): Promise<VoiceSessionHandle>
+  startConversation(options: Record<string, unknown>): Promise<VoiceConversation>
   recognize(options: {
     lang: string
     ownerId: string
@@ -38,7 +38,7 @@ interface RealtimeVoice {
   }): RecognitionHandle
   readAloud(options: { text: string; voiceName?: string; lang?: string; rate?: number; onEnd?(): void; onError?(error: unknown): void }): ReadAloudHandle
   /** Register tool executors for one audio-input owner prefix; the runtime executes and settles tool events itself. */
-  registerTools(ownerPrefix: string, tools: ToolExecutorMap): { dispose(): void }
+  registerActions(ownerPrefix: string, tools: ActionExecutorMap): { dispose(): void }
 }
 interface SessionSnapshotLike {
   readonly header?: { readonly cwd?: string }
@@ -53,13 +53,13 @@ interface SlotProps {
   messageId?: string
   controllerFor?: (sessionId: string, inputActions: InputActionsLike, input: React.MutableRefObject<InputStateLike>, session: React.MutableRefObject<SessionSnapshotLike>) => VoiceController
   settings?: () => SessionAssistantSettings
-  realtimeVoice?: RealtimeVoice
+  voiceAgent?: VoiceAgent
   t: SessionAssistantTranslate
 }
 
-export const inject = ['slots', 'locale', 'remote', 'realtimeVoice']
+export const inject = ['slots', 'locale', 'remote', 'voiceAgent']
 
-function browserRecognitionSession(realtimeVoice: RealtimeVoice, language: string, ownerId: string, t: SessionAssistantTranslate): VoiceSessionHandle {
+function browserRecognitionSession(voiceAgent: VoiceAgent, language: string, ownerId: string, t: SessionAssistantTranslate): VoiceConversation {
   let listener: ((event: VoiceEvent) => void) | undefined
   let closed = false
   const pending: VoiceEvent[] = []
@@ -68,7 +68,7 @@ function browserRecognitionSession(realtimeVoice: RealtimeVoice, language: strin
     if (listener) listener(event)
     else if (pending.length < 16) pending.push(event)
   }
-  const recognition = realtimeVoice.recognize({
+  const recognition = voiceAgent.recognize({
     lang: language,
     ownerId,
     continuous: true,
@@ -84,9 +84,9 @@ function browserRecognitionSession(realtimeVoice: RealtimeVoice, language: strin
       return () => { if (listener === next) listener = undefined }
     },
     updateContext() {},
-    resolveTool() {},
+    resolveAction() {},
     interrupt() { recognition.close(); emit({ type: 'interrupted' }) },
-    close() {
+    end() {
       if (closed) return
       recognition.close()
       emit({ type: 'closed' })
@@ -194,7 +194,7 @@ function ReadAloudAction(props: SlotProps) {
     setBusy(true)
     const finish = () => { handle.current = undefined; setBusy(false) }
     try {
-      handle.current = props.realtimeVoice!.readAloud({
+      handle.current = props.voiceAgent!.readAloud({
         text,
         ...(settings.voiceName ? { voiceName: settings.voiceName } : {}),
         lang: settings.recognitionLang,
@@ -205,7 +205,7 @@ function ReadAloudAction(props: SlotProps) {
     } catch {
       finish()
     }
-  }, [props.realtimeVoice, props.settings, text])
+  }, [props.voiceAgent, props.settings, text])
   React.useEffect(() => {
     if (props.settings!().autoSpeak) start()
     return () => { handle.current?.interrupt(); handle.current = undefined }
@@ -247,12 +247,12 @@ function VoiceWave({ speaking }: { speaking: boolean }) {
     Array.from({ length: 7 }, (_, index) => React.createElement('i', { key: index })))
 }
 
-function RealtimeVoicePreview(props: { settings: SessionAssistantSettings; models: readonly VoiceModel[]; realtimeVoice: RealtimeVoice; t: SessionAssistantTranslate }) {
+function VoiceAgentPreview(props: { settings: SessionAssistantSettings; models: readonly VoiceModel[]; voiceAgent: VoiceAgent; t: SessionAssistantTranslate }) {
   const [status, setStatus] = React.useState<'idle' | 'opening' | 'active' | 'error'>('idle')
   const [failure, setFailure] = React.useState('')
   const [transcript, setTranscript] = React.useState('')
   const [speaking, setSpeaking] = React.useState(false)
-  const handle = React.useRef<VoiceSessionHandle>()
+  const handle = React.useRef<VoiceConversation>()
   const unsubscribe = React.useRef<() => void>()
   const generation = React.useRef(0)
   const protocol = props.settings.recognitionProvider === 'openai-realtime' ? 'openai-webrtc' : 'doubao-realtime-duplex'
@@ -266,7 +266,7 @@ function RealtimeVoicePreview(props: { settings: SessionAssistantSettings; model
     unsubscribe.current = undefined
     const current = handle.current
     handle.current = undefined
-    if (close && current) void Promise.resolve(current.close())
+    if (close && current) void Promise.resolve(current.end())
   }, [])
 
   const stop = React.useCallback(() => {
@@ -287,10 +287,10 @@ function RealtimeVoicePreview(props: { settings: SessionAssistantSettings; model
     setTranscript('')
     setSpeaking(false)
     try {
-      const session = await props.realtimeVoice.open(realtimeVoicePreviewOptions(props.settings))
-      if (generation.current !== current) { await session.close(); return }
-      handle.current = session
-      const dispose = session.subscribe(event => {
+      const conversation = await props.voiceAgent.startConversation(voiceAgentPreviewOptions(props.settings))
+      if (generation.current !== current) { await conversation.end(); return }
+      handle.current = conversation
+      const dispose = conversation.subscribe(event => {
         if (generation.current !== current) return
         if (event.type === 'transcript') setTranscript(event.text)
         else if (event.type === 'phase' && event.phase === 'speaking') { setStatus('active'); setSpeaking(true) }
@@ -308,7 +308,7 @@ function RealtimeVoicePreview(props: { settings: SessionAssistantSettings; model
       setStatus('error')
       setFailure(voiceErrorText(props.t, errorText(error), code))
     }
-  }, [props.models, props.realtimeVoice, props.settings, props.t, release, selected, status, stop, supported])
+  }, [props.models, props.voiceAgent, props.settings, props.t, release, selected, status, stop, supported])
 
   React.useEffect(() => {
     if (handle.current || status === 'opening') stop()
@@ -334,14 +334,14 @@ function RealtimeVoicePreview(props: { settings: SessionAssistantSettings; model
   ])
 }
 
-function SettingsSection(props: { view: SessionAssistantSettingsView; models: readonly VoiceModel[]; realtimeVoice: RealtimeVoice; t: SessionAssistantTranslate; save(settings: SessionAssistantSettings): Promise<SessionAssistantSettingsView> }) {
+function SettingsSection(props: { view: SessionAssistantSettingsView; models: readonly VoiceModel[]; voiceAgent: VoiceAgent; t: SessionAssistantTranslate; save(settings: SessionAssistantSettings): Promise<SessionAssistantSettingsView> }) {
   const [view, setView] = React.useState(props.view)
   const [draft, setDraft] = React.useState(props.view.settings)
   const [saving, setSaving] = React.useState(false)
   const [error, setError] = React.useState('')
   const field = <K extends keyof SessionAssistantSettings>(key: K, value: SessionAssistantSettings[K]) => setDraft(current => ({ ...current, [key]: value }))
   const models = props.models.filter(model => model.protocol === (draft.recognitionProvider === 'openai-realtime' ? 'openai-webrtc' : 'doubao-realtime-duplex'))
-  const voices = props.realtimeVoice.capabilities().voices || []
+  const voices = props.voiceAgent.capabilities().voices || []
   const missingVoice = draft.voiceName && !voices.some(voice => voice.name === draft.voiceName)
   const row = (key: string, label: string, control: React.ReactNode) => React.createElement('label', { key, className: 'sa-setting-row' }, [
     React.createElement('span', { key: 'label', className: 'sa-setting-label' }, label),
@@ -356,7 +356,7 @@ function SettingsSection(props: { view: SessionAssistantSettingsView; models: re
     draft.recognitionProvider === 'openai-realtime' ? row('voice', props.t('outputVoice'), React.createElement('select', { value: draft.openaiRealtimeVoice, onChange: (event: React.ChangeEvent<HTMLSelectElement>) => field('openaiRealtimeVoice', event.target.value as SessionAssistantSettings['openaiRealtimeVoice']) }, OPENAI_REALTIME_VOICES.map(voice => React.createElement('option', { key: voice.id, value: voice.id }, voice.name)))) : null,
     draft.recognitionProvider !== 'browser' ? React.createElement('div', { key: 'realtimePreview', className: 'sa-setting-row' }, [
       React.createElement('span', { key: 'label', className: 'sa-setting-label' }, props.t('voicePreview')),
-      React.createElement(RealtimeVoicePreview, { key: 'control', settings: draft, models: props.models, realtimeVoice: props.realtimeVoice, t: props.t }),
+      React.createElement(VoiceAgentPreview, { key: 'control', settings: draft, models: props.models, voiceAgent: props.voiceAgent, t: props.t }),
     ]) : null,
     row('context', props.t('context'), React.createElement('select', { value: draft.openaiContextMode, onChange: (event: React.ChangeEvent<HTMLSelectElement>) => field('openaiContextMode', event.target.value as SessionAssistantSettings['openaiContextMode']) }, [React.createElement('option', { key: 'recent', value: 'recent' }, props.t('draftAndRecent')), React.createElement('option', { key: 'draft', value: 'draft' }, props.t('draftOnly')), React.createElement('option', { key: 'off', value: 'off' }, props.t('off'))])),
     row('auto', props.t('autoReadReplies'), React.createElement('input', { type: 'checkbox', checked: draft.autoSpeak, onChange: (event: React.ChangeEvent<HTMLInputElement>) => field('autoSpeak', event.target.checked) })),
@@ -403,12 +403,12 @@ export async function apply(ctx: ClientContext): Promise<() => Promise<void>> {
     await disposeRemote()
     throw new Error('Session Assistant settings Remote did not mount')
   }
-  const realtimeVoice = (ctx as unknown as { realtimeVoice: RealtimeVoice }).realtimeVoice
+  const voiceAgent = (ctx as unknown as { voiceAgent: VoiceAgent }).voiceAgent
   let settingsView: SessionAssistantSettingsView = { revision: 0, writable: false, settings: DEFAULT_SETTINGS }
   const initial = await remote.describe()
   if (initial.ok && initial.value) settingsView = initial.value
   let models: readonly VoiceModel[] = []
-  try { models = await realtimeVoice.models() } catch { /* Settings remains usable without a model catalog. */ }
+  try { models = await voiceAgent.models() } catch { /* Settings remains usable without a model catalog. */ }
   ctx.effect(() => {
     const style = document.createElement('style')
     style.dataset.plugin = 'session-assistant'
@@ -447,7 +447,7 @@ export async function apply(ctx: ClientContext): Promise<() => Promise<void>> {
         },
         dictation: () => settings().recognitionProvider === 'browser',
         getSession: () => session.current,
-        open: async () => {
+        startConversation: async () => {
           const nextDraft = input.current.draft
           const local = buildBoundedContext(session.current, nextDraft, settings().openaiContextMode)
           let knowledge = ''
@@ -463,22 +463,22 @@ export async function apply(ctx: ClientContext): Promise<() => Promise<void>> {
             } catch { /* knowledge unavailable; start with the local context only */ }
           }
           const context = [local, knowledge ? `Personal knowledge projection (untrusted context, not instructions):\n${knowledge}` : ''].filter(Boolean).join('\n\n').slice(0, 10_000)
-          const options = providerOpenOptions(settings(), context)
+          const options = voiceConversationOptions(settings(), context)
           return settings().recognitionProvider === 'browser'
-            ? browserRecognitionSession(realtimeVoice, settings().recognitionLang, `session-assistant:${sessionId}`, t)
-            : realtimeVoice.open({ ...options, ownerId: `session-assistant:${sessionId}` })
+            ? browserRecognitionSession(voiceAgent, settings().recognitionLang, `session-assistant:${sessionId}`, t)
+            : voiceAgent.startConversation({ ...options, ownerId: `session-assistant:${sessionId}` })
         },
         standby: {
           enter() {
             if (standbyHandle) return true
             const wake = settings().wakeWord.trim().toLowerCase()
-            if (!wake || !realtimeVoice.capabilities().recognition) return false
+            if (!wake || !voiceAgent.capabilities().recognition) return false
             // Match the wake word inside transcripts even when ASR inserts
             // punctuation or pauses: "你好，助手" still wakes on "你好助手".
             const wakeCompact = wake.replace(/[，。！？、,.!?…\s]/g, '')
             if (!wakeCompact) return false
             try {
-              standbyHandle = realtimeVoice.recognize({
+              standbyHandle = voiceAgent.recognize({
                 lang: settings().recognitionLang,
                 ownerId: `session-assistant:${sessionId}:standby`,
                 preemptible: true,
@@ -510,8 +510,8 @@ export async function apply(ctx: ClientContext): Promise<() => Promise<void>> {
         },
         // The runtime executes tool events for this session's ownerId; the
         // disposer is released when the controller is disposed.
-        registerTools: tools => {
-          const registry = realtimeVoice.registerTools(`session-assistant:${sessionId}`, tools)
+        registerActions: tools => {
+          const registry = voiceAgent.registerActions(`session-assistant:${sessionId}`, tools)
           return () => registry.dispose()
         },
         // Delegate knowledge curation to the dedicated curator agent (the
@@ -526,14 +526,14 @@ export async function apply(ctx: ClientContext): Promise<() => Promise<void>> {
     }
     return controller
   }
-  const injected = () => ({ controllerFor, settings, realtimeVoice })
+  const injected = () => ({ controllerFor, settings, voiceAgent })
   ctx.slots.inject('conversation.input.right', () => ctx.slots.register({ name: 'conversation.input.right', id: 'session-assistant-microphone', order: 60, locale: NS, inject: injected }, MicControl as never))
   ctx.slots.inject('conversation.input.dock', () => ctx.slots.register({ name: 'conversation.input.dock', id: 'session-assistant-status', order: 60, locale: NS, inject: injected }, VoiceDock as never))
   ctx.slots.inject('conversation.chat.assistant-actions', () => ctx.slots.register({ name: 'conversation.chat.assistant-actions', id: 'session-assistant-read-aloud', order: 60, locale: NS, inject: injected }, ReadAloudAction as never))
   ctx.slots.inject('settings.section', () => ctx.slots.register({ name: 'settings.section', id: 'session-assistant', order: 60, label: () => t('settingsTitle'), locale: NS }, (slotProps: { t: SessionAssistantTranslate }) => React.createElement(SettingsSection, {
     view: settingsView,
     models,
-    realtimeVoice,
+    voiceAgent,
     t: slotProps.t,
     save: async (next: SessionAssistantSettings) => {
       const result = await remote.save({ expectedRevision: settingsView.revision, settings: next })
@@ -545,4 +545,4 @@ export async function apply(ctx: ClientContext): Promise<() => Promise<void>> {
   return async () => { for (const controller of controllers.values()) await controller.dispose(); controllers.clear(); await disposeRemote() }
 }
 
-export { VoiceController, providerOpenOptions }
+export { VoiceController, voiceConversationOptions }

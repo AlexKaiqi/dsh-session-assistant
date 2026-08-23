@@ -6,13 +6,13 @@ export interface InputActionsLike {
     setDraft(text: string): void;
     submit(): void;
 }
-export interface ToolEvent {
-    type: 'tool';
+export interface ActionEvent {
+    type: 'action';
     callId: string;
     name: string;
     arguments?: unknown;
 }
-export type ToolName = 'update_working_draft' | 'submit_to_agent' | 'end_voice_session' | 'organize_notes';
+export type ActionName = 'update_working_draft' | 'submit_to_agent' | 'end_voice_session' | 'organize_notes';
 export interface CurateRequest {
     readonly sessionId: string;
     readonly cwd?: string;
@@ -27,24 +27,24 @@ export interface CurateResult {
     readonly error?: string;
 }
 /**
- * Tool-control handoff from the runtime tool registry: the executor calls
- * `resolve` to settle the tool result before running follow-up work (the
+ * Action-control handoff from the voice conversation: the executor calls
+ * `resolve` to settle the action result before running follow-up work (the
  * model keeps speaking after the result is delivered). Returns whether the
  * result was actually delivered; a closed session reports false.
  */
-export interface ToolControl {
+export interface ActionControl {
     resolve(result: unknown, options?: {
         continueResponse?: boolean;
     }): boolean;
 }
-export interface ToolExecutor {
-    execute(args: unknown, control: ToolControl): unknown | Promise<unknown>;
+export interface ActionExecutor {
+    execute(args: unknown, control: ActionControl): unknown | Promise<unknown>;
 }
-export interface ToolExecutorMap {
-    update_working_draft: ToolExecutor;
-    submit_to_agent: ToolExecutor;
-    end_voice_session: ToolExecutor;
-    organize_notes: ToolExecutor;
+export interface ActionExecutorMap {
+    update_working_draft: ActionExecutor;
+    submit_to_agent: ActionExecutor;
+    end_voice_session: ActionExecutor;
+    organize_notes: ActionExecutor;
 }
 export type VoiceEvent = {
     type: 'status';
@@ -59,7 +59,7 @@ export type VoiceEvent = {
     source?: 'input' | 'output';
     text: string;
     final?: boolean;
-} | ToolEvent | {
+} | ActionEvent | {
     type: 'interrupted';
 } | {
     type: 'error';
@@ -70,14 +70,14 @@ export type VoiceEvent = {
     type: 'closed';
     reason?: string;
 };
-export interface VoiceSessionHandle {
+export interface VoiceConversation {
     subscribe(listener: (event: VoiceEvent) => void): () => void;
     updateContext(context: string): void | Promise<void>;
-    resolveTool(callId: string, result: unknown, options?: {
+    resolveAction(callId: string, result: unknown, options?: {
         continueResponse?: boolean;
     }): void | Promise<void>;
     interrupt(): void | Promise<void>;
-    close(): void | Promise<void>;
+    end(): void | Promise<void>;
 }
 export interface ControllerState {
     readonly status: 'idle' | 'standby' | 'opening' | 'active' | 'closed' | 'error';
@@ -108,7 +108,7 @@ export interface ControllerDependencies {
     readonly inputActions: InputActionsLike;
     readonly getInput: () => InputStateLike;
     readonly context: (draft?: string) => string | Promise<string>;
-    readonly open: () => Promise<VoiceSessionHandle> | VoiceSessionHandle;
+    readonly startConversation: () => Promise<VoiceConversation> | VoiceConversation;
     readonly dictation?: boolean | (() => boolean);
     /** Called by the UI whenever the current-session snapshot changes (detects primary-Agent questions and replies). */
     readonly observeSession?: (snapshot: unknown) => void;
@@ -120,12 +120,12 @@ export interface ControllerDependencies {
         exit(): void;
     };
     /**
-     * Register this assistant's tool executors with the runtime tool registry
-     * (realtimeVoice.registerTools for this session's ownerId). The runtime
-     * executes tool events itself and settles the results (dual output); the
+     * Register this assistant's action executors with the voice Agent runtime
+     * (voiceAgent.registerActions for this session's ownerId). The runtime
+     * executes action requests and settles the results (dual output); the
      * returned disposer must run when the controller is disposed.
      */
-    readonly registerTools: (tools: ToolExecutorMap) => () => void;
+    readonly registerActions: (tools: ActionExecutorMap) => () => void;
     /**
      * Delegate knowledge curation to the dedicated curator agent. Resolves
      * immediately for the voice model; the curation result is announced when
@@ -177,13 +177,13 @@ export declare class VoiceController {
     private appendDiscussion;
     private appendDictation;
     /**
-     * Execute one registered tool through the runtime tool-control handoff.
+     * Execute one registered action through the runtime action-control handoff.
      * The runtime settles the result (control.resolve) and keeps the model
      * speaking; this method keeps the product boundaries: draft mutation only
      * through inputActions, submission only after explicit authorization, and
      * best-effort context refresh that never blocks the tool flow.
      */
-    executeTool(name: ToolName, args: unknown, control: ToolControl): Promise<void>;
+    executeTool(name: ActionName, args: unknown, control: ActionControl): Promise<void>;
     /**
      * Delegate knowledge curation to the dedicated text-model curator agent.
      * The tool result is settled immediately (the model keeps speaking and the
@@ -193,16 +193,14 @@ export declare class VoiceController {
     private organizeNotes;
     private publish;
 }
-export declare function providerOpenOptions(settings: SessionAssistantSettings, context: string): {
-    protocol: string;
+export declare function voiceConversationOptions(settings: SessionAssistantSettings, context: string): {
     routeId: string;
     profileId: string;
     context: string;
     language: import("../settings-values.ts").RecognitionLanguage;
 };
 /** Open a full-duplex preview session using the actual selected Realtime model/voice. */
-export declare function realtimeVoicePreviewOptions(settings: SessionAssistantSettings): {
-    protocol: string;
+export declare function voiceAgentPreviewOptions(settings: SessionAssistantSettings): {
     routeId: string;
     profileId: string;
 };

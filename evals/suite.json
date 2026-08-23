@@ -123,7 +123,7 @@
       "id": "VOI-003", "stage": "realtime-voice", "title": "上下文更新、工具往返与会话防串写", "tier": "release", "minEvidence": "L2", "validates": ["voice", "context", "draft"],
       "preconditions": "本地可控的 OpenAI HTTP 和豆包 WebSocket 夹具。",
       "steps": ["发送音频与 context.update", "触发 update_working_draft 工具并返回结果", "切换焦点后再次返回工具调用", "发送未授权上游事件"],
-      "criteria": ["上下文更新保留服务端 Profile 和工具白名单", "标准化工具结果经 resolveTool 返回且不会重复执行", "Slot/controller 释放后拒绝写入原会话或其他会话", "非标准化上游命令不会进入产品层"]
+      "criteria": ["上下文更新保留服务端 Profile 和工具白名单", "标准化工具结果经 resolveAction 返回且不会重复执行", "Slot/controller 释放后拒绝写入原会话或其他会话", "非标准化上游命令不会进入产品层"]
     },
     {
       "id": "E2E-001", "stage": "product-e2e", "title": "宠物文本问答到草稿", "tier": "release", "minEvidence": "L3", "validates": ["dialogue", "context", "draft", "pet-integration"],
@@ -177,7 +177,7 @@
       "id": "OPS-001", "stage": "product-e2e", "title": "插件组合生命周期", "tier": "release", "minEvidence": "L3", "validates": ["lifecycle", "pet-integration", "voice"],
       "preconditions": "支持热重载/禁用三个插件。",
       "steps": ["按不同顺序启用和禁用三个插件", "活动会话中卸载宠物或 Voice", "重载 Session Assistant"],
-      "criteria": ["依赖装配顺序不导致宿主崩溃", "disposer 清理 Slot、Remote、controller 订阅和 realtimeVoice session", "恢复后只有一个入口和一个活动连接"]
+      "criteria": ["依赖装配顺序不导致宿主崩溃", "disposer 清理 Slot、Remote、controller 订阅和 voiceAgent session", "恢复后只有一个入口和一个活动连接"]
     },
     {
       "id": "OPS-002", "stage": "product-e2e", "title": "长时间运行、可访问性和降级", "tier": "benchmark", "minEvidence": "L3", "validates": ["lifecycle", "pet-body", "dialogue"],
