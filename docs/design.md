@@ -31,7 +31,7 @@
 2. **只服务当前会话**：麦克风、状态、草稿、提交、提醒都以 Slot 的 `sessionId` 为界；换会话即拆解旧控制器。
 3. **语音模型不执行**：语音侧只有三个工具（`update_working_draft` / `submit_to_agent` / `end_voice_session`）；文件、终端、网络是主 Agent 的领地，通过提交跨越。
 4. **提交必须显式**：`submit_to_agent` 只响应明确的语音授权；空草稿拒绝（否则输入框会静默吞掉空提交，用户听到“已提交”却什么都没发生）。
-5. **Provider 差异收敛在传输层**：豆包与 OpenAI 的事件结构、续话机制、转写事件各不相同，全部在 `dsh-voice-agent` 归一化为标准事件；产品层只消费标准事件。
+5. **Provider 差异收敛在传输层**：豆包与 OpenAI 的事件结构、续话机制、转写事件各不相同，全部在 `dsh-realtime-voice` 归一化为标准事件；产品层只消费标准事件。
 6. **一切反馈都在会话内**：主 Agent 的提问与完成出现在状态条——因为用户授权后关心的是“这件事怎么样了”，而这个答案只存在于当前会话。
 
 ## 4. 能力全景
@@ -62,7 +62,7 @@
 ```text
 dsh-multi-model-provider       模型目录 / 路由 / profile 注册（凭据在 Host）
         │
-dsh-voice-agent             传输与媒体：豆包 Duplex / OpenAI WebRTC / 浏览器识别
+dsh-realtime-voice             传输与媒体：豆包 Duplex / OpenAI WebRTC / 浏览器识别
         │                       事件归一化、麦克风租约、错误码（mic_not_found 等）
         │
 dsh-session-assistant（本插件） 产品层：会话内状态机 + 草稿 + 提交 + 会话观察

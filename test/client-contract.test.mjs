@@ -70,7 +70,7 @@ test('session-assistant contains no provider transport or DOM implementation str
   const forbidden = [
     'RTCPeerConnection', 'WebSocket', 'AudioContext', 'ScriptProcessor', 'SpeechRecognition', 'speechSynthesis',
     'MutationObserver', 'querySelector', '.closest(', 'KeyboardEvent', 'document.body', '/dsh-session-assistant/config',
-    'input_audio_buffer.', 'response.output_audio.', 'conversation.item.create', '/dsh-voice-agent/',
+    'input_audio_buffer.', 'response.output_audio.', 'conversation.item.create', '/dsh-realtime-voice/',
   ]
   for (const value of forbidden) for (const text of files) assert.equal(text.includes(value), false, `forbidden client implementation string: ${value}`)
 })

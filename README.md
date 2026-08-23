@@ -11,7 +11,7 @@
 - 插件自有的严格 Typert Remote 只公开带 revision 防冲突的 `describe` 与 `save`。
 - Client UI 精确注册到 `conversation.input.right`、`conversation.input.dock`、`conversation.chat.assistant-actions` 和 `settings.section`；麦克风与状态只属于当前 Session。
 - Client 文案集中注册到宿主 locale namespace，中文显示“会话助手”，并随全局语言设置在中英文间实时切换。
-- `dsh-voice-agent` 对外提供“与 Agent 开始全双工语音对话”的能力；Provider 协议、媒体传输、打断和音频输入仲裁都隐藏在该边界之后。
+- `dsh-realtime-voice` 对外提供“与 Agent 开始全双工语音对话”的能力；Provider 协议、媒体传输、打断和音频输入仲裁都隐藏在该边界之后。
 - 每个会话以 `session-assistant:<sessionId>` 开始一场 `VoiceConversation`，并用同一 owner 前缀向 `voiceAgent.registerActions` 注册产品动作。动作的授权门仍由本插件持有；若全局 Pet Assistant 或其他语音产品正在占用麦克风，会明确返回冲突。
 - 若 `dsh-personal-knowledge-base` 已启用，Host Remote 在建连前读取有界 `personalKnowledge.project()`；未安装时静默降级，不改变语音权限。
 - **知识整理委派**：语音模型多一个 `organize_notes` 操作——用户说“整理/保存/记住这些讨论”时，立即回传结果（模型继续说话），同时把草稿与当前会话增量交给**专职知识整理 agent**（PKB 的文本模型 maintainer，通过 `sessionAssistantSettings/curate` Remote）；整理完成（更新当前工作投影 + 生成长期知识提案）后在状态条显示并语音播报。整理 agent 只提案不确认，授权门仍在知识库。
