@@ -1,10 +1,10 @@
 import type { SessionAssistantSettings } from '../settings.ts'
-import { countAssistantSteps, questionsInSession, type SessionSnapshotLike } from './context.ts'
+import { countAssistantSteps, questionsInSession, type SessionContextMetadata, type SessionSnapshotLike } from './context.ts'
 
 export interface InputStateLike { readonly draft: string }
 export interface InputActionsLike { setDraft(text: string): void; submit(): void }
 export interface ActionEvent { type: 'action'; callId: string; name: string; arguments?: unknown }
-export type ActionName = 'update_working_draft' | 'submit_to_agent' | 'end_voice_session' | 'organize_notes'
+export type ActionName = 'update_working_draft' | 'prepare_agent_handoff' | 'submit_to_agent' | 'end_voice_session' | 'organize_notes'
 
 export interface CurateRequest {
   readonly sessionId: string
@@ -37,6 +37,7 @@ export interface ActionExecutor {
 
 export interface ActionExecutorMap {
   update_working_draft: ActionExecutor
+  prepare_agent_handoff: ActionExecutor
   submit_to_agent: ActionExecutor
   end_voice_session: ActionExecutor
   organize_notes: ActionExecutor
@@ -63,6 +64,8 @@ export interface ControllerState {
   readonly phase: string
   readonly transcript: string
   readonly draftStatus: 'drafting' | 'ready'
+  /** A complete primary-Agent request is prepared but still requires explicit user authorization. */
+  readonly handoff?: { readonly reason: string } | undefined
   readonly error?: string | undefined
   /** Stable transport-level error code (for example mic_not_found) kept separate from the display message. */
   readonly errorCode?: string | undefined
@@ -87,6 +90,8 @@ export interface ControllerDependencies {
   readonly observeSession?: (snapshot: unknown) => void
   /** Read the latest current-session snapshot (for submission baseline tracking). */
   readonly getSession?: () => unknown
+  /** Read Host-owned Session/workspace identity without granting workspace access. */
+  readonly getSessionMetadata?: () => SessionContextMetadata
   /** Standby wake-word listening (browser recognition); enter() returns false when unavailable. */
   readonly standby?: { enter(): boolean; exit(): void }
   /**
@@ -152,6 +157,7 @@ export class VoiceController {
     // controller only supplies executors and keeps its own state machine.
     this.disposeTools = deps.registerActions({
       update_working_draft: { execute: (args, control) => this.executeTool('update_working_draft', args, control) },
+      prepare_agent_handoff: { execute: (args, control) => this.executeTool('prepare_agent_handoff', args, control) },
       submit_to_agent: { execute: (args, control) => this.executeTool('submit_to_agent', args, control) },
       end_voice_session: { execute: (args, control) => this.executeTool('end_voice_session', args, control) },
       organize_notes: { execute: (args, control) => this.executeTool('organize_notes', args, control) },
@@ -171,7 +177,7 @@ export class VoiceController {
     this.discussion = ''
     this.baseline = this.deps.getInput().draft
     this.lastApplied = this.baseline
-    this.publish({ status: 'opening', phase: 'connecting', transcript: '', error: undefined, errorCode: undefined, submitNotice: undefined, question: undefined, agentReply: undefined })
+    this.publish({ status: 'opening', phase: 'connecting', transcript: '', error: undefined, errorCode: undefined, handoff: undefined, submitNotice: undefined, question: undefined, agentReply: undefined })
     try {
       const handle = await this.deps.startConversation(initialUserText.trim().slice(0, 20_000), initialAudio)
       if (this.disposed || generation !== this.generation) { await handle.end(); return }
@@ -195,7 +201,7 @@ export class VoiceController {
     this.handle = undefined
     this.deps.standby?.exit()
     if (handle !== undefined) await handle.end()
-    if (!this.disposed) this.publish({ status: 'idle', phase: 'idle', transcript: '', error: undefined, errorCode: undefined, submitNotice: undefined, question: undefined, agentReply: undefined })
+    if (!this.disposed) this.publish({ status: 'idle', phase: 'idle', transcript: '', error: undefined, errorCode: undefined, handoff: undefined, submitNotice: undefined, question: undefined, agentReply: undefined })
   }
 
   async dispose(): Promise<void> {
@@ -329,17 +335,22 @@ export class VoiceController {
     const draft = typeof parsed.draft === 'string' ? parsed.draft : undefined
     const validUpdate = name !== 'update_working_draft'
       || typeof parsed.summary === 'string' && (parsed.status === 'drafting' || parsed.status === 'ready')
+    const validHandoff = name !== 'prepare_agent_handoff'
+      || typeof parsed.reason === 'string' && parsed.reason.trim() !== '' && parsed.reason.length <= 1_000
     const emptySubmit = name === 'submit_to_agent' && (draft === undefined || draft.trim() === '')
-    if (draft === undefined || draft.length > 24_000 || emptySubmit || !validUpdate) {
+    const emptyHandoff = name === 'prepare_agent_handoff' && (draft === undefined || draft.trim() === '')
+    if (draft === undefined || draft.length > 24_000 || emptySubmit || emptyHandoff || !validUpdate || !validHandoff) {
       // An empty submission would be silently ignored by the composer, so the
       // user would hear "submitted" while nothing was sent: reject it, surface
       // it in the dock, and let the voice model relay the reason too.
-      this.publish({ status: 'error', errorCode: 'empty_submit' })
+      this.publish({ status: 'error', errorCode: emptySubmit ? 'empty_submit' : 'invalid_action' })
       control.resolve({
         ok: false,
         error: emptySubmit
           ? 'There is no draft content to submit. Ask the user to dictate what to send first.'
-          : 'Invalid draft tool arguments.',
+          : name === 'prepare_agent_handoff'
+            ? 'A non-empty draft and a short handoff reason are required.'
+            : 'Invalid draft tool arguments.',
       })
       return
     }
@@ -353,13 +364,20 @@ export class VoiceController {
     this.deps.inputActions.setDraft(draft)
     this.baseline = draft
     this.lastApplied = draft
-    const draftStatus = name === 'submit_to_agent' || parsed.status === 'ready' ? 'ready' : 'drafting'
-    this.publish({ draftStatus, phase: 'editing' })
+    const draftStatus = name === 'submit_to_agent' || name === 'prepare_agent_handoff' || parsed.status === 'ready' ? 'ready' : 'drafting'
+    const handoff = name === 'prepare_agent_handoff'
+      ? { reason: String(parsed.reason).trim().slice(0, 1_000) }
+      : name === 'submit_to_agent' || draftStatus === 'drafting'
+        ? undefined
+        : this.state.handoff
+    this.publish({ draftStatus, handoff, phase: 'editing' })
     saLog(`tool:${name} draftLen:${draft.length} status:${draftStatus}`)
     // Settle the tool call FIRST so the model continues speaking: Doubao
     // Duplex resumes the turn on the function-call result, and a session.update
     // sent before it can orphan the pending call and silence the follow-up.
-    const settled = control.resolve({ ok: true, draft, status: draftStatus })
+    const settled = control.resolve(name === 'prepare_agent_handoff'
+      ? { ok: true, draft, status: 'awaiting_confirmation', reason: handoff?.reason }
+      : { ok: true, draft, status: draftStatus })
     if (!settled) {
       this.publish({ status: 'error', error: 'The voice session closed before the tool result could be delivered.' })
       return
@@ -367,7 +385,7 @@ export class VoiceController {
     if (name === 'submit_to_agent' && !this.disposed) {
       saLog('submit() -> primary Agent')
       this.deps.inputActions.submit()
-      this.publish({ submitNotice: true })
+      this.publish({ handoff: undefined, submitNotice: true })
       // Fresh reply baseline: the primary-Agent work that follows this submission
       // is what we announce, not anything that was already on screen.
       if (this.deps.getSession) this.stepBaseline = countAssistantSteps(this.deps.getSession() as SessionSnapshotLike)
@@ -390,8 +408,7 @@ export class VoiceController {
     }
     const instruction = typeof parsed.instruction === 'string' ? parsed.instruction.trim().slice(0, 2_000) : ''
     const draft = this.deps.getInput().draft
-    const withMeta = this.deps.getSession?.() as { header?: { cwd?: string }; cwd?: string } | undefined
-    const cwd = String(withMeta?.header?.cwd || withMeta?.cwd || '')
+    const cwd = String(this.deps.getSessionMetadata?.().cwd || '')
     // Hand the voice discussion itself (finalized transcript) plus the draft
     // to the curator: without the transcript, spoken discussion that never
     // reached the draft would be lost to curation. Only the discussion delta

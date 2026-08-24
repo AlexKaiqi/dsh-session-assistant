@@ -70,6 +70,24 @@ test('controller applies complete drafts only through inputActions and distingui
   assert.deepEqual(s1[0].result, { ok: true, draft: 'final text', status: 'ready' })
 })
 
+test('prepare_agent_handoff stages a visible request without submitting it', async () => {
+  const h = harness()
+  await h.controller.start()
+  const prepared = await h.runTool('prepare_agent_handoff', { draft: 'Inspect the workspace and fix the failing test.', reason: 'Requires workspace files and command execution.' })
+  assert.equal(h.draft(), 'Inspect the workspace and fix the failing test.')
+  assert.equal(h.submitted(), 0)
+  assert.deepEqual(prepared[0].result, {
+    ok: true,
+    draft: 'Inspect the workspace and fix the failing test.',
+    status: 'awaiting_confirmation',
+    reason: 'Requires workspace files and command execution.',
+  })
+  assert.deepEqual(h.controller.getSnapshot().handoff, { reason: 'Requires workspace files and command execution.' })
+  await h.runTool('submit_to_agent', { draft: h.draft() })
+  assert.equal(h.submitted(), 1)
+  assert.equal(h.controller.getSnapshot().handoff, undefined)
+})
+
 test('submit_to_agent settles the tool result before submitting the draft', async () => {
   const h = harness()
   await h.controller.start()
@@ -127,7 +145,7 @@ test('disposing the controller unregisters its tools from the runtime registry',
   assert.equal(h.disposeCount(), 1)
 })
 
-test('provider selection is data-only and bounded context excludes hidden/running nodes', () => {
+test('provider selection is data-only and bounded context carries workspace facts while excluding hidden/running nodes', () => {
   assert.deepEqual(voiceConversationOptions({ recognitionProvider: 'openai-realtime', recognitionLang: 'zh-CN', openaiRealtimeModel: 'route', openaiRealtimeVoice: 'cedar', doubaoRealtimeModel: '', openaiContextMode: 'recent', autoSpeak: false, autoSpeakMode: 'final', voiceName: '', rate: 1 }, 'ctx'), {
     routeId: 'route', profileId: 'session-assistant-openai-cedar', context: 'ctx', language: 'zh-CN',
   })
@@ -136,10 +154,15 @@ test('provider selection is data-only and bounded context excludes hidden/runnin
     ['hidden', { kind: 'user', visibility: 'hidden', data: { content: [{ type: 'text', text: 'secret' }] } }],
     ['running', { kind: 'assistant-step', data: { status: 'running', blocks: [{ type: 'text', text: 'thinking' }] } }],
   ])
-  const context = buildBoundedContext({ chat: { order: ['visible', 'hidden', 'running'], nodes } }, 'draft', 'recent')
+  const metadata = { sessionId: 'session-a', sessionTitle: 'Fix tests', cwd: '/work/acme', agentPreset: 'multi-model-voice', workspaceId: 'workspace-a', workspaceTitle: 'Acme' }
+  const context = buildBoundedContext({ chat: { order: ['visible', 'hidden', 'running'], nodes } }, 'draft', 'recent', metadata)
+  assert.match(context, /session-a|workspace-a|\/work\/acme|multi-model-voice/)
   assert.match(context, /visible context/)
   assert.doesNotMatch(context, /secret|thinking/)
-  assert.ok(context.length <= 3800)
+  assert.ok(context.length <= 5200)
+  const operationalOnly = buildBoundedContext({}, 'hidden draft', 'off', metadata)
+  assert.match(operationalOnly, /\/work\/acme|multi-model-voice/)
+  assert.doesNotMatch(operationalOnly, /hidden draft/)
 })
 
 test('the voice preview opens a full-duplex session on the selected model and voice', () => {

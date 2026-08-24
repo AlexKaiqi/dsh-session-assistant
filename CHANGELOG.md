@@ -4,6 +4,12 @@
 
 暂无未发布变更。
 
+## 0.4.1 (2026-08-24)
+
+- **Workspace 与 Agent 上下文**：始终从 Host 的 Session/Workspace 投影注入当前 session、workspace 路径与名称、Agent preset 和双方能力边界；“关闭上下文”只关闭草稿与对话历史，不再丢失运行上下文，个人知识库只作为可选附加投影
+- **三类任务路由**：语音助手明确区分可本地讨论的问题、需要主 Agent 的 workspace/当前状态/工具/副作用/验证任务，以及需要单次澄清的模糊意图；不再陷入“自己不能做、又不知道何时交给 Agent”的死区
+- **显式交接闭环**：新增 `prepare_agent_handoff`，先把完整请求写入输入框并显示“需要主 Agent · 等待确认”，用户回答“可以/提交”后才调用 `submit_to_agent`；准备交接不会执行或隐式提交
+
 ## 0.4.0 (2026-08-24)
 
 - **依赖与兼容基线**：升级到 DeepSeek Harness `0.1.1-rc.2`；multi-model `rc.11` 与 realtime-voice `0.3.1` 为必需 peer，Personal Knowledge `0.3.2` 改为显式可选 peer，并同步 Inventory 元数据与安装/更新说明

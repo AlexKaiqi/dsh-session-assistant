@@ -8,16 +8,19 @@ const mod = await import('../lib/index.js')
 
 test('model contract keeps the voice role bounded and exposes exact tool/result surfaces', () => {
   assert.match(mod.PROMPT, /cannot execute tasks/)
-  assert.match(mod.PROMPT, /Only after an explicit spoken instruction/)
+  assert.match(mod.PROMPT, /Classify each user turn/)
+  assert.match(mod.PROMPT, /explicit affirmative reply/)
   assert.ok(mod.Config)
   assert.deepEqual(mod.SESSION_ASSISTANT_TOOLS.map(tool => tool.name), [
     'update_working_draft',
+    'prepare_agent_handoff',
     'submit_to_agent',
     'end_voice_session',
     'organize_notes',
   ])
   assert.deepEqual(mod.SESSION_ASSISTANT_TOOL_OUTPUT, {
     update_working_draft: { required: ['draft', 'summary', 'status'] },
+    prepare_agent_handoff: { required: ['draft', 'reason'] },
     submit_to_agent: { required: ['draft'] },
     end_voice_session: { required: [] },
     organize_notes: {},

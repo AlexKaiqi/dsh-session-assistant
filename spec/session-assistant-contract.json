@@ -1,5 +1,5 @@
 {
-  "version": 9,
+  "version": 10,
   "profileId": "session-assistant",
   "settingsNamespace": "session-assistant",
   "settingsRemote": "sessionAssistantSettings",
@@ -27,11 +27,14 @@
   "petEventIntegration": false,
   "tools": [
     "update_working_draft",
+    "prepare_agent_handoff",
     "submit_to_agent",
     "end_voice_session",
     "organize_notes"
   ],
   "draftMutation": "inputActions.setDraft",
+  "operationalContext": "always includes bounded Host-owned Session, Workspace, and primary-Agent capability metadata; the user context setting controls draft/history only, and optional personal knowledge is appended rather than carrying workspace identity",
+  "routing": "local discussion and stable general knowledge stay in Session Assistant; workspace/current-state/tool/side-effect/verification work is prepared through prepare_agent_handoff and submitted only after explicit authorization",
   "submission": "inputActions.submit",
   "executionBoundary": "primary-agent-only"
 }

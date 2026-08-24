@@ -29,7 +29,7 @@
 
 1. **响应是第一要务**：任何工具执行后，用户必须得到可见或可听的反馈。状态条（dock）是“必然通道”，语音确认是“尽力通道”——不依赖 Provider 的自动续话行为。
 2. **只服务当前会话**：麦克风、状态、草稿、提交、提醒都以 Slot 的 `sessionId` 为界；换会话即拆解旧控制器。
-3. **语音模型不执行**：语音侧只有四个产品动作（`update_working_draft` / `submit_to_agent` / `end_voice_session` / `organize_notes`）；前三个只操作会话草稿与显式提交，知识整理只委派给可选 PKB maintainer。文件、终端、网络仍是主 Agent 的领地。
+3. **语音模型不执行**：语音侧只有五个产品动作（`update_working_draft` / `prepare_agent_handoff` / `submit_to_agent` / `end_voice_session` / `organize_notes`）；它只能操作会话草稿、准备交接和显式提交，知识整理只委派给可选 PKB maintainer。文件、终端、网络仍是主 Agent 的领地。
 4. **提交必须显式**：`submit_to_agent` 只响应明确的语音授权；空草稿拒绝（否则输入框会静默吞掉空提交，用户听到“已提交”却什么都没发生）。
 5. **Provider 差异收敛在传输层**：豆包与 OpenAI 的事件结构、续话机制、转写事件各不相同，全部在 `dsh-realtime-voice` 归一化为标准事件；产品层只消费标准事件。
 6. **一切反馈都在会话内**：主 Agent 的提问与完成出现在状态条——因为用户授权后关心的是“这件事怎么样了”，而这个答案只存在于当前会话。
@@ -41,6 +41,7 @@
 | 语音会话（豆包/OpenAI Realtime、浏览器识别） | ✅ | 全双工，服务当前会话 |
 | 实时转写显示 | ✅ | 流式 `input_audio_transcription.delta`，多行状态条 |
 | 草稿讨论与修改 | ✅ | `update_working_draft`，讨论不入草稿 |
+| Agent 任务路由 | ✅ | workspace、当前状态、工具、副作用和验证类任务先 `prepare_agent_handoff`，显示等待确认，不会误报已执行 |
 | 显式提交给主 Agent | ✅ | `submit_to_agent` → composer → 当前会话；空草稿拒绝 |
 | 工具失败非静默 | ✅ | 失败回传模型 + 状态条显示原因 |
 | 主 Agent 提问提示（human-in-the-loop） | ✅ | 监听 `ask_user_question`，状态条显示问题与选项 |
@@ -77,7 +78,7 @@ dsh-session-assistant（本插件） 产品层：会话内状态机 + 草稿 + �
 | 决策 | 为什么 |
 | --- | --- |
 | 提交走 composer（`inputActions.submit()`） | 提交的就是“用户当前可见的草稿”，与打字提交同一路径，天然在当前会话、可被用户编辑确认 |
-| 语音侧只有 4 个产品动作 | 语音模型无文件、终端或网络执行面；新增的 `organize_notes` 只把有界讨论委派给可选 PKB maintainer，工具面仍保持最小化 |
+| 语音侧只有 5 个产品动作 | 语音模型无文件、终端或网络执行面；`prepare_agent_handoff` 只形成等待确认的请求，`organize_notes` 只把有界讨论委派给可选 PKB maintainer，工具面仍保持最小化 |
 | 空草稿提交必须拒绝 | DSH composer 对空草稿提交**静默 no-op**（`if (trimmed === '') return []`）——旧实现会让模型说“已提交”而实际什么都没发生 |
 | `tool.result` 先于 `session.update` | Doubao Duplex 在函数结果上自动续轮；先发 `session.update` 可能冲掉 pending call 导致模型永远等不到结果 |
 | 豆包不发送 `response.create` | 该事件是 OpenAI 方言；官方 SDK 在函数结果后自动续轮，多发的无效事件可能让模型干等 |

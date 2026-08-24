@@ -1,4 +1,5 @@
 import type { SessionAssistantSettings } from '../settings.ts';
+import { type SessionContextMetadata } from './context.ts';
 export interface InputStateLike {
     readonly draft: string;
 }
@@ -12,7 +13,7 @@ export interface ActionEvent {
     name: string;
     arguments?: unknown;
 }
-export type ActionName = 'update_working_draft' | 'submit_to_agent' | 'end_voice_session' | 'organize_notes';
+export type ActionName = 'update_working_draft' | 'prepare_agent_handoff' | 'submit_to_agent' | 'end_voice_session' | 'organize_notes';
 export interface CurateRequest {
     readonly sessionId: string;
     readonly cwd?: string;
@@ -42,6 +43,7 @@ export interface ActionExecutor {
 }
 export interface ActionExecutorMap {
     update_working_draft: ActionExecutor;
+    prepare_agent_handoff: ActionExecutor;
     submit_to_agent: ActionExecutor;
     end_voice_session: ActionExecutor;
     organize_notes: ActionExecutor;
@@ -84,6 +86,10 @@ export interface ControllerState {
     readonly phase: string;
     readonly transcript: string;
     readonly draftStatus: 'drafting' | 'ready';
+    /** A complete primary-Agent request is prepared but still requires explicit user authorization. */
+    readonly handoff?: {
+        readonly reason: string;
+    } | undefined;
     readonly error?: string | undefined;
     /** Stable transport-level error code (for example mic_not_found) kept separate from the display message. */
     readonly errorCode?: string | undefined;
@@ -117,6 +123,8 @@ export interface ControllerDependencies {
     readonly observeSession?: (snapshot: unknown) => void;
     /** Read the latest current-session snapshot (for submission baseline tracking). */
     readonly getSession?: () => unknown;
+    /** Read Host-owned Session/workspace identity without granting workspace access. */
+    readonly getSessionMetadata?: () => SessionContextMetadata;
     /** Standby wake-word listening (browser recognition); enter() returns false when unavailable. */
     readonly standby?: {
         enter(): boolean;

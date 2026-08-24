@@ -14,11 +14,24 @@ export const UPDATE_WORKING_DRAFT_TOOL = {
 
 export const SUBMIT_TO_AGENT_TOOL = {
   type: 'function', name: 'submit_to_agent', strict: true,
-  description: 'Atomically place the exact final request in the main composer and submit it to the primary Agent. Use only after an explicit spoken instruction to submit, send, proceed, or execute.',
+  description: 'Atomically place the exact final request in the main composer and submit it to the primary Agent. Use only after a direct explicit submit instruction or an explicit affirmative reply to the assistant\'s immediately preceding handoff proposal.',
   parameters: {
     type: 'object', additionalProperties: false,
     properties: { draft: { type: 'string', description: 'The complete exact final text for the primary Agent.' } },
     required: ['draft'],
+  },
+}
+
+export const PREPARE_AGENT_HANDOFF_TOOL = {
+  type: 'function', name: 'prepare_agent_handoff', strict: true,
+  description: 'Prepare a complete request for work that requires the primary Agent, show the pending handoff in the current composer, and wait for explicit user confirmation. This never submits or executes the request.',
+  parameters: {
+    type: 'object', additionalProperties: false,
+    properties: {
+      draft: { type: 'string', description: 'The complete self-contained request proposed for the primary Agent.' },
+      reason: { type: 'string', description: 'A short explanation of why primary-Agent capabilities are required.' },
+    },
+    required: ['draft', 'reason'],
   },
 }
 
@@ -40,10 +53,11 @@ export const ORGANIZE_NOTES_TOOL = {
   },
 }
 
-export const SESSION_ASSISTANT_TOOLS = [UPDATE_WORKING_DRAFT_TOOL, SUBMIT_TO_AGENT_TOOL, END_VOICE_SESSION_TOOL, ORGANIZE_NOTES_TOOL]
+export const SESSION_ASSISTANT_TOOLS = [UPDATE_WORKING_DRAFT_TOOL, PREPARE_AGENT_HANDOFF_TOOL, SUBMIT_TO_AGENT_TOOL, END_VOICE_SESSION_TOOL, ORGANIZE_NOTES_TOOL]
 
 export const SESSION_ASSISTANT_TOOL_OUTPUT = {
   update_working_draft: { required: ['draft', 'summary', 'status'] },
+  prepare_agent_handoff: { required: ['draft', 'reason'] },
   submit_to_agent: { required: ['draft'] },
   end_voice_session: { required: [] },
   organize_notes: {},

@@ -8,7 +8,7 @@ import sessionAssistantRemote from '../typert-remote.ts'
 import { DEFAULT_SETTINGS, OPENAI_REALTIME_VOICES, type SessionAssistantSettings } from '../settings-values.ts'
 import type { SessionAssistantSettingsView } from '../settings-remote.ts'
 import { VoiceController, matchesWakePhrase, selectVoiceRoute, voiceConversationOptions, voiceAgentPreviewOptions, saLog, type InputActionsLike, type InputStateLike, type ActionExecutorMap, type VoiceEvent, type VoiceConversation } from './controller.ts'
-import { buildBoundedContext, messageText } from './context.ts'
+import { buildBoundedContext, messageText, type SessionContextMetadata } from './context.ts'
 import { dictionaries, NS, phaseLabel, type SessionAssistantLocaleKey, type SessionAssistantTranslate } from './locales.ts'
 
 interface RemoteResult<T> { readonly ok: boolean; readonly value?: T; readonly error?: { readonly message: string } }
@@ -46,17 +46,21 @@ interface VoiceAgent {
   registerActions(ownerPrefix: string, tools: ActionExecutorMap): { dispose(): void }
 }
 interface SessionSnapshotLike {
-  readonly header?: { readonly cwd?: string }
-  readonly cwd?: string
   readonly chat?: { readonly order?: readonly string[]; readonly nodes?: Map<string, unknown> }
 }
+interface SessionSummaryLike { readonly title?: string; readonly displayTitle?: string; readonly cwd?: string; readonly agentPreset?: string }
+interface SessionListStateLike { readonly byId: Readonly<Record<string, SessionSummaryLike | undefined>> }
+interface WorkspaceViewLike { readonly workspaceId: string; readonly path: string; readonly title: string; readonly sessionIds: readonly string[] }
+interface WorkspaceListStateLike { readonly items: readonly WorkspaceViewLike[] }
 interface SlotProps {
   sessionId: string
   useSession<T>(selector: (state: SessionSnapshotLike) => T): T
+  useSessions<T>(selector: (state: SessionListStateLike) => T): T
+  useWorkspaces<T>(selector: (state: WorkspaceListStateLike) => T): T
   useInput<T>(selector: (state: InputStateLike) => T): T
   inputActions: InputActionsLike
   messageId?: string
-  controllerFor?: (sessionId: string, inputActions: InputActionsLike, input: React.MutableRefObject<InputStateLike>, session: React.MutableRefObject<SessionSnapshotLike>) => VoiceController
+  controllerFor?: (sessionId: string, inputActions: InputActionsLike, input: React.MutableRefObject<InputStateLike>, session: React.MutableRefObject<SessionSnapshotLike>, metadata: React.MutableRefObject<SessionContextMetadata>) => VoiceController
   settings?: () => SessionAssistantSettings
   voiceAgent?: VoiceAgent
   t: SessionAssistantTranslate
@@ -105,12 +109,26 @@ function browserRecognitionSession(voiceAgent: VoiceAgent, language: string, own
 function useController(props: SlotProps): VoiceController {
   const input = props.useInput(state => state)
   const session = props.useSession(state => state)
+  const summary = props.useSessions(state => state.byId[props.sessionId])
+  const workspace = props.useWorkspaces(state => state.items.find(item => item.sessionIds.includes(props.sessionId)))
   const inputRef = React.useRef(input)
   const sessionRef = React.useRef(session)
+  const metadataRef = React.useRef<SessionContextMetadata>({ sessionId: props.sessionId })
   inputRef.current = input
   sessionRef.current = session
+  const sessionTitle = summary?.title || summary?.displayTitle
+  const cwd = summary?.cwd || workspace?.path
+  metadataRef.current = {
+    sessionId: props.sessionId,
+    ...(sessionTitle ? { sessionTitle } : {}),
+    ...(cwd ? { cwd } : {}),
+    ...(summary?.agentPreset ? { agentPreset: summary.agentPreset } : {}),
+    ...(workspace?.workspaceId ? { workspaceId: workspace.workspaceId } : {}),
+    ...(workspace?.title ? { workspaceTitle: workspace.title } : {}),
+    ...(workspace?.path ? { workspacePath: workspace.path } : {}),
+  }
   return React.useMemo(
-    () => props.controllerFor!(props.sessionId, props.inputActions, inputRef, sessionRef),
+    () => props.controllerFor!(props.sessionId, props.inputActions, inputRef, sessionRef, metadataRef),
     [props.sessionId, props.inputActions, props.controllerFor],
   )
 }
@@ -174,7 +192,7 @@ function VoiceDock(props: SlotProps) {
   React.useEffect(() => { controller.observeSession(session) }, [controller, session])
   if (state.status === 'idle' || state.status === 'standby' || state.status === 'closed') return null
   return React.createElement('section', { className: 'sa-dock' }, [
-    React.createElement('div', { key: 'status', className: 'sa-dock-head' }, `${phaseLabel(props.t, state.phase)}${state.draftStatus === 'ready' ? ` · ${props.t('draftReady')}` : ''}${state.submitNotice ? ` · ${props.t('submitted')}` : ''}${state.agentReply ? ` · ${props.t('agentReplied')}` : ''}${state.curatorNotice ? ` · ${curatorNoticeText(props.t, state.curatorNotice)}` : ''}`),
+    React.createElement('div', { key: 'status', className: 'sa-dock-head' }, `${phaseLabel(props.t, state.phase)}${state.handoff ? ` · ${props.t('agentRequired')}` : state.draftStatus === 'ready' ? ` · ${props.t('draftReady')}` : ''}${state.submitNotice ? ` · ${props.t('submitted')}` : ''}${state.agentReply ? ` · ${props.t('agentReplied')}` : ''}${state.curatorNotice ? ` · ${curatorNoticeText(props.t, state.curatorNotice)}` : ''}`),
     state.question ? React.createElement('div', { key: 'question', className: 'sa-question' }, `${props.t('agentAsking')} ${state.question.text}`) : null,
     state.transcript ? React.createElement('div', { key: 'text', className: 'sa-transcript' }, state.transcript) : null,
     state.error ? React.createElement('div', { key: 'error', className: 'sa-error' }, voiceErrorText(props.t, state.error, state.errorCode)) : null,
@@ -425,7 +443,7 @@ export async function apply(ctx: ClientContext): Promise<() => Promise<void>> {
   const controllers = new Map<string, VoiceController>()
   /** One shared wake-word listener per session; preemptible so an active voice session takes over cleanly. */
   let standbyHandle: RecognitionHandle | undefined
-  const controllerFor = (sessionId: string, inputActions: InputActionsLike, input: React.MutableRefObject<InputStateLike>, session: React.MutableRefObject<SessionSnapshotLike>) => {
+  const controllerFor = (sessionId: string, inputActions: InputActionsLike, input: React.MutableRefObject<InputStateLike>, session: React.MutableRefObject<SessionSnapshotLike>, metadata: React.MutableRefObject<SessionContextMetadata>) => {
     let controller = controllers.get(sessionId)
     if (!controller) {
       controller = new VoiceController({
@@ -434,13 +452,13 @@ export async function apply(ctx: ClientContext): Promise<() => Promise<void>> {
         getInput: () => input.current,
         context: async draft => {
           const nextDraft = draft ?? input.current.draft
-          const local = buildBoundedContext(session.current, nextDraft, settings().openaiContextMode)
+          const local = buildBoundedContext(session.current, nextDraft, settings().openaiContextMode, metadata.current)
           if (settings().openaiContextMode === 'off') return local
           try {
             const projected = await remote.context({
               query: nextDraft.slice(0, 2_400),
               sessionId,
-              cwd: session.current.header?.cwd || session.current.cwd || '',
+              cwd: metadata.current.cwd || '',
               maxChars: 6_000,
             })
             const knowledge = projected.ok && projected.value?.available ? projected.value.text : ''
@@ -452,16 +470,17 @@ export async function apply(ctx: ClientContext): Promise<() => Promise<void>> {
         },
         dictation: () => settings().recognitionProvider === 'browser',
         getSession: () => session.current,
+        getSessionMetadata: () => metadata.current,
         startConversation: async (initialUserText, initialAudio) => {
           const nextDraft = input.current.draft
-          const local = buildBoundedContext(session.current, nextDraft, settings().openaiContextMode)
+          const local = buildBoundedContext(session.current, nextDraft, settings().openaiContextMode, metadata.current)
           let knowledge = ''
           if (settings().openaiContextMode !== 'off') {
             try {
               const projected = await remote.context({
                 query: nextDraft.slice(0, 2_400),
                 sessionId,
-                cwd: session.current.header?.cwd || session.current.cwd || '',
+                cwd: metadata.current.cwd || '',
                 maxChars: 6_000,
               })
               knowledge = projected.ok && projected.value?.available ? projected.value.text : ''

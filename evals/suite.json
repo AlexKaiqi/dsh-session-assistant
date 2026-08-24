@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "dsh-session-assistant-product",
   "version": "2.0.0",
-  "objective": "验证 Session Assistant 在当前 Session 内提供可配置、可本地化、生命周期安全的实时语音讨论，并只通过受控动作修改草稿、显式提交给主 Agent 或委派知识整理。",
+  "objective": "验证 Session Assistant 在当前 Session 内感知 Host 投影的 workspace 与主 Agent 边界，可靠区分本地对话、澄清和 Agent 任务，并只通过受控动作准备交接、显式提交或委派知识整理。",
   "releaseOrder": ["product-surface", "draft-and-submit", "voice-runtime", "knowledge-integration", "security", "packaging"],
   "evidenceLevels": {
     "L1": "静态契约或纯函数单元测试",
@@ -13,7 +13,7 @@
   "boundaries": [
     {
       "owner": "session-assistant",
-      "owns": ["session-context", "product-prompt", "draft-actions", "explicit-agent-submit", "knowledge-delegation", "localized-ui"],
+      "owns": ["session-context", "task-routing", "product-prompt", "draft-actions", "agent-handoff", "explicit-agent-submit", "knowledge-delegation", "localized-ui"],
       "denies": ["provider-credentials", "media-transport", "direct-workspace-tools", "implicit-agent-submit"]
     },
     {
@@ -35,7 +35,7 @@
   "dimensions": [
     { "id": "surface", "validates": "设置、会话入口、状态与朗读操作在真实 DSH UI 中可发现。" },
     { "id": "localization", "validates": "内置语言覆盖且随宿主 locale 实时切换。" },
-    { "id": "draft", "validates": "讨论、完整草稿更新和显式提交保持分离。" },
+    { "id": "draft", "validates": "讨论、完整草稿更新、待确认 Agent 交接和显式提交保持分离。" },
     { "id": "lifecycle", "validates": "Session、组件、连接与麦克风资源不会串写或泄漏。" },
     { "id": "voice", "validates": "Provider 中立的实时语音、唤醒、打断与错误恢复成立。" },
     { "id": "knowledge", "validates": "知识投影和整理是可选、异步且诚实降级的。" },
@@ -57,13 +57,13 @@
     {
       "id": "AST-002",
       "stage": "draft-and-submit",
-      "title": "讨论、草稿修改与显式提交",
+      "title": "讨论、Agent 路由、草稿修改与显式提交",
       "tier": "release",
       "minEvidence": "L2",
       "validates": ["draft", "security"],
       "preconditions": "使用可控 VoiceConversation 和草稿执行器。",
-      "steps": ["发送普通讨论事件", "调用 update_working_draft", "用空草稿及有效草稿调用 submit_to_agent"],
-      "criteria": ["普通讨论不修改输入框", "草稿更新只写入完整 draft 且保留 ready/drafting 状态", "空提交被可见拒绝，有效提交只执行一次且先返回工具结果"]
+      "steps": ["发送普通讨论事件", "用 workspace 类任务调用 prepare_agent_handoff", "调用 update_working_draft", "用空草稿及有效草稿调用 submit_to_agent"],
+      "criteria": ["普通讨论不修改输入框", "Agent 类任务形成完整可见草稿并显示等待确认但不提交", "草稿更新只写入完整 draft 且保留 ready/drafting 状态", "空提交被可见拒绝，有效提交只执行一次且先返回工具结果"]
     },
     {
       "id": "AST-003",
@@ -129,7 +129,7 @@
       "validates": ["security", "draft", "knowledge"],
       "preconditions": "检查产品 prompt、工具 schema、Remote contract 与客户端实现。",
       "steps": ["枚举模型工具", "检查上下文来源和 Remote 输入", "请求文件、终端或隐式 Agent 操作"],
-      "criteria": ["模型工具仅为改稿、显式提交、结束会话和整理知识", "无文件、终端、DOM 读取或任意网络工具", "上下文有界且外部内容不扩大动作授权"]
+      "criteria": ["模型工具仅为改稿、准备 Agent 交接、显式提交、结束会话和整理知识", "Host 投影的 Session、Workspace 与 Agent preset 在关闭草稿/历史上下文时仍可用", "无文件、终端、DOM 读取或任意网络工具", "上下文有界且外部内容不扩大动作授权"]
     },
     {
       "id": "OPS-001",

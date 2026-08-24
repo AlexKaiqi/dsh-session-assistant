@@ -40,6 +40,27 @@ export declare const SUBMIT_TO_AGENT_TOOL: {
         required: string[];
     };
 };
+export declare const PREPARE_AGENT_HANDOFF_TOOL: {
+    type: string;
+    name: string;
+    strict: boolean;
+    description: string;
+    parameters: {
+        type: string;
+        additionalProperties: boolean;
+        properties: {
+            draft: {
+                type: string;
+                description: string;
+            };
+            reason: {
+                type: string;
+                description: string;
+            };
+        };
+        required: string[];
+    };
+};
 export declare const END_VOICE_SESSION_TOOL: {
     type: string;
     name: string;
@@ -81,6 +102,9 @@ export declare const SESSION_ASSISTANT_TOOLS: {
 }[];
 export declare const SESSION_ASSISTANT_TOOL_OUTPUT: {
     update_working_draft: {
+        required: string[];
+    };
+    prepare_agent_handoff: {
         required: string[];
     };
     submit_to_agent: {

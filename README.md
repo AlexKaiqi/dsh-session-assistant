@@ -44,7 +44,7 @@ dsh plugin --profile web update dsh-multi-model-provider dsh-realtime-voice dsh-
 - **知识整理委派**：语音模型多一个 `organize_notes` 操作——用户说“整理/保存/记住这些讨论”时，立即回传结果（模型继续说话），同时把草稿与当前会话增量交给**专职知识整理 agent**（PKB 的文本模型 maintainer，通过 `sessionAssistantSettings/curate` Remote）；整理完成（更新当前工作投影 + 生成长期知识提案）后在状态条显示并语音播报。整理 agent 只提案不确认，授权门仍在知识库。
 - Session Assistant 不监听或广播任何宠物事件，也不承担全局待机、唤醒或宠物人格；这些能力由独立的 Pet Assistant 拥有。
 
-语音模型只有 `update_working_draft`、`submit_to_agent`、`end_voice_session` 和 `organize_notes` 四项操作；它们的执行器由本插件注册进运行时，产品边界不变：草稿修改只调用 `inputActions.setDraft(fullText)`，提交只调用 `inputActions.submit()`，整理只委派给知识整理 agent。每个 controller 绑定 Slot 提供的 `sessionId`；组件、Session 或连接释放后，迟到的工具调用不会再修改或提交草稿。
+语音模型只有 `update_working_draft`、`prepare_agent_handoff`、`submit_to_agent`、`end_voice_session` 和 `organize_notes` 五项操作；需要 workspace、当前状态、工具、副作用或验证的请求先形成可见的待确认交接，不会直接执行或提交。它们的执行器由本插件注册进运行时，产品边界不变：草稿修改只调用 `inputActions.setDraft(fullText)`，提交只调用 `inputActions.submit()`，整理只委派给知识整理 agent。每个 controller 绑定 Slot 提供的 `sessionId`；组件、Session 或连接释放后，迟到的工具调用不会再修改或提交草稿。
 
 OpenAI／豆包路由、Profile、音色、浏览器识别、上下文与朗读选项继续保留，但本插件只消费标准化会话事件。设置页的助手音色试听直接开始一场无产品动作的 `VoiceConversation`；对已完成回复的手动朗读仍通过 finalized `messageId` 从 Session 快照解析正文，不读取页面 DOM。
 
