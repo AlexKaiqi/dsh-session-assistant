@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { VoiceController, matchesWakePhrase, selectVoiceRoute, voiceConversationOptions, voiceAgentPreviewOptions } from '../lib/controller.js'
-import { buildBoundedContext } from '../lib/index.js'
+import { VoiceController, assistantSettingsContext, matchesWakePhrase, selectVoiceRoute, voiceConversationOptions, voiceAgentPreviewOptions } from '../lib/controller.js'
+import { awarenessEventsInSession, buildBoundedContext } from '../lib/index.js'
 
 function harness(initial = 'base') {
   let draft = initial
@@ -14,11 +14,14 @@ function harness(initial = 'base') {
   const curateCalls = []
   let listener
   let closed = 0
+  let interrupted = 0
+  const awareness = []
+  let settings = { recognitionProvider: 'doubao-realtime', recognitionLang: 'zh-CN', openaiRealtimeModel: '', openaiRealtimeVoice: 'marin', doubaoRealtimeModel: '', openaiContextMode: 'recent', wakeWord: '你好助手' }
   const handle = {
     subscribe(next) { listener = next; return () => { listener = undefined } },
     updateContext(value) { contexts.push(value) },
     resolveAction(callId, result) { order.push(`handle-resolve:${callId}`) },
-    interrupt() {}, end() { closed++ },
+    interrupt() { interrupted++ }, end() { closed++ },
   }
   let executors
   let disposeCount = 0
@@ -33,6 +36,9 @@ function harness(initial = 'base') {
     registerActions: tools => { executors = tools; return () => { disposeCount++ } },
     // Dedicated curator agent delegation (async completion).
     curate: async request => { curateCalls.push(request); return curateResult },
+    getSettings: () => settings,
+    updateSettings: async patch => { settings = { ...settings, ...patch }; return settings },
+    notifyAwareness: event => { awareness.push(event) },
   })
   const runTool = async (name, args) => {
     const calls = []
@@ -49,7 +55,7 @@ function harness(initial = 'base') {
   return {
     controller, emit: event => listener?.(event), setDraft: value => { draft = value }, draft: () => draft,
     submitted: () => submitted, failContext: () => { failContext = true }, runTool, contexts, order,
-    closed: () => closed, disposeCount: () => disposeCount, curateCalls, startedWith,
+    closed: () => closed, interrupted: () => interrupted, awareness, disposeCount: () => disposeCount, curateCalls, startedWith, settings: () => settings,
     setCurateResult: result => { curateResult = result },
   }
 }
@@ -146,7 +152,7 @@ test('disposing the controller unregisters its tools from the runtime registry',
 })
 
 test('provider selection is data-only and bounded context carries workspace facts while excluding hidden/running nodes', () => {
-  assert.deepEqual(voiceConversationOptions({ recognitionProvider: 'openai-realtime', recognitionLang: 'zh-CN', openaiRealtimeModel: 'route', openaiRealtimeVoice: 'cedar', doubaoRealtimeModel: '', openaiContextMode: 'recent', autoSpeak: false, autoSpeakMode: 'final', voiceName: '', rate: 1 }, 'ctx'), {
+  assert.deepEqual(voiceConversationOptions({ recognitionProvider: 'openai-realtime', recognitionLang: 'zh-CN', openaiRealtimeModel: 'route', openaiRealtimeVoice: 'cedar', doubaoRealtimeModel: '', openaiContextMode: 'recent', wakeWord: '你好助手' }, 'ctx'), {
     routeId: 'route', profileId: 'session-assistant-openai-cedar', context: 'ctx', language: 'zh-CN',
   })
   const nodes = new Map([
@@ -165,18 +171,40 @@ test('provider selection is data-only and bounded context carries workspace fact
   assert.doesNotMatch(operationalOnly, /hidden draft/)
 })
 
-test('the voice preview opens a full-duplex session on the selected model and voice', () => {
-  const base = { recognitionProvider: 'browser', recognitionLang: 'zh-CN', openaiRealtimeModel: '', openaiRealtimeVoice: 'marin', doubaoRealtimeModel: '', openaiContextMode: 'recent', autoSpeak: false, autoSpeakMode: 'final', voiceName: 'Voice A', rate: 1.3 }
+test('the voice preview opens an interactive conversation on the selected model and voice', () => {
+  const base = { recognitionProvider: 'browser', recognitionLang: 'zh-CN', openaiRealtimeModel: '', openaiRealtimeVoice: 'marin', doubaoRealtimeModel: '', openaiContextMode: 'recent', wakeWord: '你好助手' }
   assert.deepEqual(voiceAgentPreviewOptions({ ...base, recognitionProvider: 'doubao-realtime', doubaoRealtimeModel: 'doubao/voice-a' }), {
     routeId: 'doubao/voice-a', profileId: 'session-assistant-preview',
+    outputOnly: false,
+    previewText: '请先简短地和我打个招呼，然后等我继续和你对话。',
   })
   assert.deepEqual(voiceAgentPreviewOptions({ ...base, recognitionProvider: 'openai-realtime', openaiRealtimeModel: 'openai/gpt-realtime', openaiRealtimeVoice: 'cedar' }), {
     routeId: 'openai/gpt-realtime', profileId: 'session-assistant-preview-openai-cedar',
+    outputOnly: false,
+    previewText: '请先简短地和我打个招呼，然后等我继续和你对话。',
   })
 })
 
+test('the voice assistant can inspect and persist its own non-secret settings', async () => {
+  const h = harness()
+  await h.controller.start()
+  const described = await h.runTool('get_assistant_settings', {})
+  assert.equal(described[0].result.ok, true)
+  assert.equal(described[0].result.settings.wakeWord, '你好助手')
+  const updated = await h.runTool('update_assistant_settings', { wakeWord: '你好小助理' })
+  assert.equal(updated[0].result.ok, true)
+  assert.deepEqual(updated[0].result.changed, ['wakeWord'])
+  assert.equal(updated[0].result.standbyRestartRequired, true)
+  assert.equal(updated[0].result.reconnectRequired, false)
+  assert.deepEqual(h.settings(), { ...described[0].result.settings, wakeWord: '你好小助理' })
+  assert.match(assistantSettingsContext(h.settings()), /你好小助理/)
+  assert.doesNotMatch(assistantSettingsContext(h.settings()), /read-aloud|autoSpeak|voiceName|rate/)
+  const invalid = await h.runTool('update_assistant_settings', { rate: 1.4 })
+  assert.equal(invalid[0].result.ok, false)
+})
+
 test('an empty configured route selects the first callable model for both conversations and previews', () => {
-  const settings = { recognitionProvider: 'doubao-realtime', recognitionLang: 'zh-CN', openaiRealtimeModel: '', openaiRealtimeVoice: 'marin', doubaoRealtimeModel: '', openaiContextMode: 'recent', autoSpeak: false, autoSpeakMode: 'final', voiceName: '', rate: 1, wakeWord: '你好助手' }
+  const settings = { recognitionProvider: 'doubao-realtime', recognitionLang: 'zh-CN', openaiRealtimeModel: '', openaiRealtimeVoice: 'marin', doubaoRealtimeModel: '', openaiContextMode: 'recent', wakeWord: '你好助手' }
   const models = [
     { id: 'doubao/unavailable', protocol: 'doubao-realtime-duplex', available: false },
     { id: 'openai/available', protocol: 'openai-webrtc', available: true },
@@ -214,6 +242,45 @@ test('observeSession surfaces primary-Agent questions and announces replies afte
   assert.equal(h.controller.getSnapshot().agentReply, true)
   h.controller.observeSession({ chat: { order: ['s1', 's2'], nodes: replyNodes } })
   assert.equal(h.controller.getSnapshot().agentReply, true)
+})
+
+test('session awareness adapters announce blocking questions and significant plan milestones but keep subagent reports internal', async () => {
+  const h = harness()
+  await h.controller.start()
+  const nodes = new Map([
+    ['plan-1', { kind: 'assistant-step', data: { status: 'settled', blocks: [{ kind: 'tool-call', callId: 'p1', name: 'todo_write', argsRaw: JSON.stringify({ todos: [{ content: 'Inspect files', status: 'in_progress' }, { content: 'Run tests', status: 'pending' }] }) }] } }],
+    ['report-1', { kind: 'steering', data: { messageId: 'report-message-1', source: { kind: 'subagent-report', senderSessionId: 'child-a' }, content: [{ type: 'text', text: 'Background subagent child-a reported:' }, { type: 'text', text: 'Found the failing module.' }] } }],
+  ])
+  let snapshot = { chat: { order: ['plan-1', 'report-1'], nodes } }
+  const projected = awarenessEventsInSession(snapshot)
+  assert.deepEqual(projected.map(event => [event.type, event.visibility, event.voicePolicy]), [
+    ['plan_updated', 'user', 'summary'],
+    ['agent_report', 'internal', 'silent'],
+  ])
+  assert.equal(projected[1].text, 'Found the failing module.')
+  h.controller.observeSession(snapshot)
+  assert.equal(h.awareness.length, 1)
+  assert.equal(h.awareness[0].type, 'plan_updated')
+  assert.equal(h.controller.getSnapshot().planNotice?.active[0], 'Inspect files')
+
+  // A new tool call with no visible milestone is absorbed without another announcement.
+  nodes.set('plan-2', { kind: 'assistant-step', data: { status: 'settled', blocks: [{ type: 'tool-call', id: 'p2', name: 'todo_write', arguments: JSON.stringify({ todos: [{ content: 'Inspect files', status: 'in_progress' }, { content: 'Run tests', status: 'pending' }] }) }] } })
+  snapshot = { chat: { order: ['plan-1', 'report-1', 'plan-2'], nodes } }
+  h.controller.observeSession(snapshot)
+  assert.equal(h.awareness.length, 1)
+
+  nodes.set('plan-3', { kind: 'assistant-step', data: { status: 'settled', blocks: [{ type: 'tool-call', id: 'p3', name: 'todo_write', arguments: { todos: [{ content: 'Inspect files', status: 'completed' }, { content: 'Run tests', status: 'in_progress' }] } }] } })
+  nodes.set('question-1', { kind: 'assistant-step', data: { status: 'running', blocks: [{ type: 'tool-call', callId: 'q2', name: 'ask_user_question', arguments: JSON.stringify({ questions: [{ question: 'Proceed with the migration?', options: [{ label: 'Proceed' }, { label: 'Stop' }] }] }) }] } })
+  snapshot = { chat: { order: ['plan-1', 'report-1', 'plan-2', 'plan-3', 'question-1'], nodes } }
+  h.emit({ type: 'phase', phase: 'speaking' })
+  h.controller.observeSession(snapshot)
+  assert.deepEqual(h.awareness.slice(1).map(event => event.type), ['plan_updated', 'user_input_required'])
+  assert.equal(h.controller.getSnapshot().planNotice?.completed, 1)
+  assert.match(h.controller.getSnapshot().question?.text ?? '', /Proceed with the migration/)
+  assert.equal(h.interrupted(), 1)
+  // Re-observing the same snapshot is idempotent.
+  h.controller.observeSession(snapshot)
+  assert.equal(h.awareness.length, 3)
 })
 
 test('standby enters and exits through the wake-word listener and never overlaps a voice session', async () => {

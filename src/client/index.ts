@@ -7,8 +7,8 @@ import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import sessionAssistantRemote from '../typert-remote.ts'
 import { DEFAULT_SETTINGS, OPENAI_REALTIME_VOICES, type SessionAssistantSettings } from '../settings-values.ts'
 import type { SessionAssistantSettingsView } from '../settings-remote.ts'
-import { VoiceController, matchesWakePhrase, selectVoiceRoute, voiceConversationOptions, voiceAgentPreviewOptions, saLog, type InputActionsLike, type InputStateLike, type ActionExecutorMap, type VoiceEvent, type VoiceConversation } from './controller.ts'
-import { buildBoundedContext, messageText, type SessionContextMetadata } from './context.ts'
+import { VoiceController, assistantSettingsContext, matchesWakePhrase, selectVoiceRoute, voiceConversationOptions, voiceAgentPreviewOptions, saLog, type InputActionsLike, type InputStateLike, type ActionExecutorMap, type VoiceEvent, type VoiceConversation } from './controller.ts'
+import { buildBoundedContext, type SessionContextMetadata } from './context.ts'
 import { dictionaries, NS, phaseLabel, type SessionAssistantLocaleKey, type SessionAssistantTranslate } from './locales.ts'
 
 interface RemoteResult<T> { readonly ok: boolean; readonly value?: T; readonly error?: { readonly message: string } }
@@ -19,15 +19,13 @@ interface SettingsPort {
   curate(request: { sessionId: string; cwd?: string; instruction?: string; extra?: string }): Promise<RemoteResult<{ available: boolean; ok: boolean; proposals: readonly string[]; currentUpdated: boolean; error?: string }>>
 }
 interface VoiceModel { readonly id: string; readonly protocol: string; readonly displayName?: string; readonly available?: boolean; readonly missingCredential?: string }
-interface BrowserVoice { readonly id: string; readonly name: string; readonly lang: string; readonly default: boolean }
 interface RecognitionHandle {
   close(): void
   discardAudio?(): void
   takeAudio?(): { readonly pcm16Base64: string; readonly sampleRate: number } | undefined
 }
-interface ReadAloudHandle { interrupt(): void; close(): void }
 interface VoiceAgent {
-  capabilities(): { readAloud?: boolean; voices?: readonly BrowserVoice[]; recognition?: boolean }
+  capabilities(): { recognition?: boolean }
   models(): Promise<readonly VoiceModel[]>
   startConversation(options: Record<string, unknown>): Promise<VoiceConversation>
   recognize(options: {
@@ -41,7 +39,6 @@ interface VoiceAgent {
     onTranscript(event: { text: string; final: boolean; resultIndex?: number }): void
     onError(error: { message?: string; code?: string } | string): void
   }): RecognitionHandle
-  readAloud(options: { text: string; voiceName?: string; lang?: string; rate?: number; onEnd?(): void; onError?(error: unknown): void }): ReadAloudHandle
   /** Register tool executors for one audio-input owner prefix; the runtime executes and settles tool events itself. */
   registerActions(ownerPrefix: string, tools: ActionExecutorMap): { dispose(): void }
 }
@@ -59,7 +56,6 @@ interface SlotProps {
   useWorkspaces<T>(selector: (state: WorkspaceListStateLike) => T): T
   useInput<T>(selector: (state: InputStateLike) => T): T
   inputActions: InputActionsLike
-  messageId?: string
   controllerFor?: (sessionId: string, inputActions: InputActionsLike, input: React.MutableRefObject<InputStateLike>, session: React.MutableRefObject<SessionSnapshotLike>, metadata: React.MutableRefObject<SessionContextMetadata>) => VoiceController
   settings?: () => SessionAssistantSettings
   voiceAgent?: VoiceAgent
@@ -194,6 +190,7 @@ function VoiceDock(props: SlotProps) {
   return React.createElement('section', { className: 'sa-dock' }, [
     React.createElement('div', { key: 'status', className: 'sa-dock-head' }, `${phaseLabel(props.t, state.phase)}${state.handoff ? ` · ${props.t('agentRequired')}` : state.draftStatus === 'ready' ? ` · ${props.t('draftReady')}` : ''}${state.submitNotice ? ` · ${props.t('submitted')}` : ''}${state.agentReply ? ` · ${props.t('agentReplied')}` : ''}${state.curatorNotice ? ` · ${curatorNoticeText(props.t, state.curatorNotice)}` : ''}`),
     state.question ? React.createElement('div', { key: 'question', className: 'sa-question' }, `${props.t('agentAsking')} ${state.question.text}`) : null,
+    state.planNotice ? React.createElement('div', { key: 'plan', className: 'sa-plan' }, planNoticeText(props.t, state.planNotice)) : null,
     state.transcript ? React.createElement('div', { key: 'text', className: 'sa-transcript' }, state.transcript) : null,
     state.error ? React.createElement('div', { key: 'error', className: 'sa-error' }, voiceErrorText(props.t, state.error, state.errorCode)) : null,
     state.phase === 'speaking' ? React.createElement('button', { key: 'interrupt', type: 'button', onClick: () => { void controller.interrupt() } }, props.t('interrupt')) : null,
@@ -206,41 +203,10 @@ function curatorNoticeText(t: SessionAssistantTranslate, notice: { ok: boolean; 
   return notice.proposals > 0 ? `${t('curatedDone')} · ${notice.proposals}` : t('curatedNone')
 }
 
-function ReadAloudAction(props: SlotProps) {
-  const session = props.useSession(state => state)
-  const text = messageText(session, props.messageId || '')
-  const [busy, setBusy] = React.useState(false)
-  const handle = React.useRef<ReadAloudHandle>()
-  const start = React.useCallback(() => {
-    if (!text || handle.current) return
-    const settings = props.settings!()
-    setBusy(true)
-    const finish = () => { handle.current = undefined; setBusy(false) }
-    try {
-      handle.current = props.voiceAgent!.readAloud({
-        text,
-        ...(settings.voiceName ? { voiceName: settings.voiceName } : {}),
-        lang: settings.recognitionLang,
-        rate: settings.rate,
-        onEnd: finish,
-        onError: finish,
-      })
-    } catch {
-      finish()
-    }
-  }, [props.voiceAgent, props.settings, text])
-  React.useEffect(() => {
-    if (props.settings!().autoSpeak) start()
-    return () => { handle.current?.interrupt(); handle.current = undefined }
-  }, [props.messageId, props.settings, start])
-  const onClick = () => {
-    if (handle.current) {
-      handle.current.interrupt()
-      handle.current = undefined
-      setBusy(false)
-    } else start()
-  }
-  return React.createElement('button', { type: 'button', className: 'sa-icon', disabled: !text, title: props.t(busy ? 'stopReading' : 'readReply'), 'aria-label': props.t(busy ? 'stopReading' : 'readReply'), onClick }, props.t(busy ? 'stop' : 'read'))
+function planNoticeText(t: SessionAssistantTranslate, event: { phase: string; completed: number; total: number; active: readonly string[] }): string {
+  if (event.phase === 'completed') return `${t('agentPlanCompleted')} ${event.completed}/${event.total}`
+  if (event.active.length) return `${t('agentPlanProgress')} ${event.completed}/${event.total} · ${event.active.join('；')}`
+  return `${t('agentPlanCreated')} ${event.total}`
 }
 
 function errorText(error: unknown): string {
@@ -271,13 +237,14 @@ function VoiceWave({ speaking }: { speaking: boolean }) {
 }
 
 function VoiceAgentPreview(props: { settings: SessionAssistantSettings; models: readonly VoiceModel[]; voiceAgent: VoiceAgent; t: SessionAssistantTranslate }) {
-  const [status, setStatus] = React.useState<'idle' | 'opening' | 'active' | 'error'>('idle')
+  const [status, setStatus] = React.useState<'idle' | 'opening' | 'active' | 'done' | 'error'>('idle')
   const [failure, setFailure] = React.useState('')
   const [transcript, setTranscript] = React.useState('')
   const [speaking, setSpeaking] = React.useState(false)
   const handle = React.useRef<VoiceConversation>()
   const unsubscribe = React.useRef<() => void>()
   const generation = React.useRef(0)
+  const spoke = React.useRef(false)
   const protocol = props.settings.recognitionProvider === 'openai-realtime' ? 'openai-webrtc' : 'doubao-realtime-duplex'
   const candidates = props.models.filter(model => model.protocol === protocol)
   const routeId = props.settings.recognitionProvider === 'openai-realtime' ? props.settings.openaiRealtimeModel : props.settings.doubaoRealtimeModel
@@ -299,6 +266,7 @@ function VoiceAgentPreview(props: { settings: SessionAssistantSettings; models: 
     setFailure('')
     setTranscript('')
     setSpeaking(false)
+    spoke.current = false
   }, [release])
 
   const start = React.useCallback(async () => {
@@ -309,6 +277,7 @@ function VoiceAgentPreview(props: { settings: SessionAssistantSettings; models: 
     setFailure('')
     setTranscript('')
     setSpeaking(false)
+    spoke.current = false
     try {
       const conversation = await props.voiceAgent.startConversation(voiceAgentPreviewOptions(props.settings, selected!.id))
       if (generation.current !== current) { await conversation.end(); return }
@@ -316,12 +285,16 @@ function VoiceAgentPreview(props: { settings: SessionAssistantSettings; models: 
       const dispose = conversation.subscribe(event => {
         if (generation.current !== current) return
         if (event.type === 'transcript') setTranscript(event.text)
-        else if (event.type === 'phase' && event.phase === 'speaking') { setStatus('active'); setSpeaking(true) }
+        else if (event.type === 'phase' && event.phase === 'speaking') {
+          spoke.current = true
+          setStatus('active')
+          setSpeaking(true)
+        }
         else if (event.type === 'phase' && event.phase === 'listening') { setStatus('active'); setSpeaking(false) }
-        else if (event.type === 'error') { setStatus('error'); setFailure(voiceErrorText(props.t, event.message, event.code)) }
-        else if (event.type === 'closed' && generation.current === current) { setStatus('idle'); setTranscript(''); setSpeaking(false) }
+        else if (event.type === 'error') { release(true); setStatus('error'); setFailure(voiceErrorText(props.t, event.message, event.code)); setSpeaking(false) }
+        else if (event.type === 'closed' && generation.current === current) { setStatus(spoke.current ? 'done' : 'idle'); setSpeaking(false) }
       })
-      if (generation.current !== current) { dispose(); return }
+      if (generation.current !== current || handle.current !== conversation) { dispose(); return }
       unsubscribe.current = dispose
       setStatus('active')
       setSpeaking(false)
@@ -343,6 +316,7 @@ function VoiceAgentPreview(props: { settings: SessionAssistantSettings; models: 
 
   const message = status === 'opening' ? props.t('realtimePreviewConnecting')
     : status === 'error' ? `${props.t('previewFailed')}${failure || props.t('previewUnknownError')}`
+      : status === 'done' ? props.t('realtimePreviewFinished')
       : supported ? props.t('realtimePreviewUsingCurrent') : `${props.t('realtimePreviewUnavailable')}${selected?.missingCredential ? ` (${selected.missingCredential})` : ''}`
 
   return React.createElement('div', { className: 'sa-preview' }, [
@@ -357,15 +331,21 @@ function VoiceAgentPreview(props: { settings: SessionAssistantSettings; models: 
   ])
 }
 
-function SettingsSection(props: { view: SessionAssistantSettingsView; models: readonly VoiceModel[]; voiceAgent: VoiceAgent; t: SessionAssistantTranslate; save(settings: SessionAssistantSettings): Promise<SessionAssistantSettingsView> }) {
-  const [view, setView] = React.useState(props.view)
-  const [draft, setDraft] = React.useState(props.view.settings)
+interface SettingsStore {
+  getSnapshot(): SessionAssistantSettingsView
+  subscribe(listener: () => void): () => void
+  save(settings: SessionAssistantSettings): Promise<SessionAssistantSettingsView>
+}
+
+function SettingsSection(props: { store: SettingsStore; models: readonly VoiceModel[]; voiceAgent: VoiceAgent; t: SessionAssistantTranslate }) {
+  const view = React.useSyncExternalStore(props.store.subscribe, props.store.getSnapshot)
+  const [draft, setDraft] = React.useState(view.settings)
   const [saving, setSaving] = React.useState(false)
   const [error, setError] = React.useState('')
-  const field = <K extends keyof SessionAssistantSettings>(key: K, value: SessionAssistantSettings[K]) => setDraft(current => ({ ...current, [key]: value }))
+  const [saved, setSaved] = React.useState(false)
+  React.useEffect(() => { setDraft(view.settings) }, [view.revision])
+  const field = <K extends keyof SessionAssistantSettings>(key: K, value: SessionAssistantSettings[K]) => { setSaved(false); setDraft(current => ({ ...current, [key]: value })) }
   const models = props.models.filter(model => model.protocol === (draft.recognitionProvider === 'openai-realtime' ? 'openai-webrtc' : 'doubao-realtime-duplex'))
-  const voices = props.voiceAgent.capabilities().voices || []
-  const missingVoice = draft.voiceName && !voices.some(voice => voice.name === draft.voiceName)
   const row = (key: string, label: string, control: React.ReactNode) => React.createElement('label', { key, className: 'sa-setting-row' }, [
     React.createElement('span', { key: 'label', className: 'sa-setting-label' }, label),
     React.createElement('div', { key: 'control', className: 'sa-setting-control' }, control),
@@ -382,21 +362,11 @@ function SettingsSection(props: { view: SessionAssistantSettingsView; models: re
       React.createElement(VoiceAgentPreview, { key: 'control', settings: draft, models: props.models, voiceAgent: props.voiceAgent, t: props.t }),
     ]) : null,
     row('context', props.t('context'), React.createElement('select', { value: draft.openaiContextMode, onChange: (event: React.ChangeEvent<HTMLSelectElement>) => field('openaiContextMode', event.target.value as SessionAssistantSettings['openaiContextMode']) }, [React.createElement('option', { key: 'recent', value: 'recent' }, props.t('draftAndRecent')), React.createElement('option', { key: 'draft', value: 'draft' }, props.t('draftOnly')), React.createElement('option', { key: 'off', value: 'off' }, props.t('off'))])),
-    row('auto', props.t('autoReadReplies'), React.createElement('input', { type: 'checkbox', checked: draft.autoSpeak, onChange: (event: React.ChangeEvent<HTMLInputElement>) => field('autoSpeak', event.target.checked) })),
-    row('mode', props.t('readScope'), React.createElement('select', { value: draft.autoSpeakMode, onChange: (event: React.ChangeEvent<HTMLSelectElement>) => field('autoSpeakMode', event.target.value as SessionAssistantSettings['autoSpeakMode']) }, [React.createElement('option', { key: 'final', value: 'final' }, props.t('finalReply')), React.createElement('option', { key: 'all', value: 'all' }, props.t('allReplies'))])),
-    row('readVoice', props.t('readVoice'), React.createElement('select', { value: draft.voiceName, onChange: (event: React.ChangeEvent<HTMLSelectElement>) => field('voiceName', event.target.value) }, [
-      React.createElement('option', { key: 'auto', value: '' }, props.t('autoSelect')),
-      missingVoice ? React.createElement('option', { key: 'missing', value: draft.voiceName }, `${draft.voiceName} (${props.t('voiceUnavailable')})`) : null,
-      ...voices.map(voice => React.createElement('option', { key: voice.id, value: voice.name }, `${voice.name}${voice.lang ? ` · ${voice.lang}` : ''}${voice.default ? ` · ${props.t('defaultVoice')}` : ''}`)),
-    ])),
-    row('rate', props.t('readRate'), React.createElement('div', { className: 'sa-rate' }, [
-      React.createElement('input', { key: 'slider', type: 'range', min: 0.5, max: 2, step: 0.1, value: draft.rate, onChange: (event: React.ChangeEvent<HTMLInputElement>) => field('rate', Number(event.target.value)) }),
-      React.createElement('output', { key: 'value' }, `${draft.rate}×`),
-    ])),
     row('wakeWord', props.t('wakeWord'), React.createElement('input', { value: draft.wakeWord, maxLength: 24, placeholder: props.t('wakeWordPlaceholder'), onChange: (event: React.ChangeEvent<HTMLInputElement>) => field('wakeWord', event.target.value) })),
     React.createElement('div', { key: 'actions', className: 'sa-settings-actions' }, [
       error ? React.createElement('div', { key: 'error', className: 'sa-error' }, error) : null,
-      React.createElement('button', { key: 'save', type: 'button', disabled: saving || !view.writable, onClick: async () => { setSaving(true); setError(''); try { setView(await props.save(draft)) } catch (cause: unknown) { setError(cause instanceof Error ? cause.message : String(cause)) } finally { setSaving(false) } } }, props.t(saving ? 'saving' : 'saveSettings')),
+      saved ? React.createElement('div', { key: 'saved', className: 'sa-saved', role: 'status' }, props.t('settingsSaved')) : null,
+      React.createElement('button', { key: 'save', type: 'button', disabled: saving || !view.writable, onClick: async () => { setSaving(true); setSaved(false); setError(''); try { await props.store.save(draft); setSaved(true) } catch (cause: unknown) { setError(cause instanceof Error ? cause.message : String(cause)) } finally { setSaving(false) } } }, props.t(saving ? 'saving' : 'saveSettings')),
     ]),
   ])
 }
@@ -412,9 +382,9 @@ const CSS = `
 .sa-standby-dot{position:absolute;top:2px;right:2px;width:6px;height:6px;border-radius:50%;background:var(--dsw-alias-state-warn-primary)}
 @keyframes sa-mic-pulse{0%{opacity:1}50%{opacity:.5}100%{opacity:1}}
 .sa-dock{box-sizing:border-box;width:100%;max-width:var(--dsh-composer-card-max-width);margin:0 auto;padding:8px 12px;border-left:2px solid var(--dsw-alias-label-tertiary);display:flex;align-items:center;gap:10px;color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xs-13)}
-.sa-dock-head{flex:none;font-weight:600}.sa-transcript{min-width:0;flex:1;overflow-y:auto;max-height:96px;white-space:pre-wrap;word-break:break-word;line-height:1.5}.sa-question{min-width:0;flex:1;overflow-y:auto;max-height:96px;white-space:pre-wrap;word-break:break-word;line-height:1.5;color:var(--dsw-alias-state-info-primary)}.sa-error{color:var(--dsw-alias-state-error-primary)}
+.sa-dock-head{flex:none;font-weight:600}.sa-transcript,.sa-question,.sa-plan{min-width:0;flex:1;overflow-y:auto;max-height:96px;white-space:pre-wrap;word-break:break-word;line-height:1.5}.sa-question{color:var(--dsw-alias-state-info-primary)}.sa-plan{color:var(--dsw-alias-label-secondary)}.sa-error{color:var(--dsw-alias-state-error-primary)}.sa-saved{color:var(--dsw-alias-state-success-primary);font:var(--dsw-font-xs-13)}
 .sa-dock button,.sa-settings button{height:28px;padding:0 10px;border:1px solid var(--dsw-alias-border-l2);border-radius:6px;background:transparent;color:inherit;cursor:pointer}
-.sa-settings{display:flex;flex-direction:column;gap:14px;padding:4px 0 20px}.sa-setting-row{display:grid;grid-template-columns:minmax(140px,220px) minmax(220px,1fr);gap:20px;align-items:center}.sa-setting-label{color:var(--dsw-alias-label-primary)}.sa-setting-control{min-width:0}.sa-setting-control>select,.sa-setting-control>input:not([type=checkbox]){box-sizing:border-box;width:100%;min-height:32px}.sa-setting-control>input[type=checkbox]{display:block;margin:0}.sa-rate{display:flex;align-items:center;gap:12px}.sa-rate input{min-width:0;flex:1}.sa-rate output{width:36px;color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xs-13);text-align:right}.sa-preview{display:flex;align-items:center;gap:10px;min-height:32px}.sa-preview button{flex:none}.sa-preview-playing{color:var(--dsw-alias-state-info-primary)}.sa-preview-status{min-width:0;color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xs-13)}.sa-wave{display:inline-flex;align-items:flex-end;gap:2px;height:20px;color:var(--dsw-alias-state-info-primary)}.sa-wave i{width:3px;height:35%;border-radius:1px;background:currentColor;animation:sa-wave-listen 1.4s ease-in-out infinite}.sa-wave i:nth-child(2n){animation-delay:.18s}.sa-wave i:nth-child(3n){animation-delay:.36s}.sa-wave-speak i{animation-name:sa-wave-speak;animation-duration:.45s}@keyframes sa-wave-listen{0%,100%{height:30%}50%{height:55%}}@keyframes sa-wave-speak{0%,100%{height:15%}50%{height:95%}}.sa-settings-actions{display:flex;flex-direction:column;align-items:flex-start;gap:8px;margin-left:240px}@media(max-width:700px){.sa-setting-row{grid-template-columns:1fr;gap:6px}.sa-settings-actions{margin-left:0}.sa-setting-row+.sa-setting-row{margin-top:4px}}
+.sa-settings{display:flex;flex-direction:column;gap:14px;padding:4px 0 20px}.sa-setting-row{display:grid;grid-template-columns:minmax(140px,220px) minmax(220px,1fr);gap:20px;align-items:center}.sa-setting-label{color:var(--dsw-alias-label-primary)}.sa-setting-control{min-width:0}.sa-setting-control>select,.sa-setting-control>input:not([type=checkbox]){box-sizing:border-box;width:100%;min-height:32px}.sa-setting-control>input[type=checkbox]{display:block;margin:0}.sa-preview{display:flex;align-items:center;gap:10px;min-height:32px}.sa-preview button{flex:none}.sa-preview-playing{color:var(--dsw-alias-state-info-primary)}.sa-preview-status{min-width:0;color:var(--dsw-alias-label-secondary);font:var(--dsw-font-xs-13)}.sa-wave{display:inline-flex;align-items:flex-end;gap:2px;height:20px;color:var(--dsw-alias-state-info-primary)}.sa-wave i{width:3px;height:35%;border-radius:1px;background:currentColor;animation:sa-wave-listen 1.4s ease-in-out infinite}.sa-wave i:nth-child(2n){animation-delay:.18s}.sa-wave i:nth-child(3n){animation-delay:.36s}.sa-wave-speak i{animation-name:sa-wave-speak;animation-duration:.45s}@keyframes sa-wave-listen{0%,100%{height:30%}50%{height:55%}}@keyframes sa-wave-speak{0%,100%{height:15%}50%{height:95%}}.sa-settings-actions{display:flex;flex-direction:column;align-items:flex-start;gap:8px;margin-left:240px}@media(max-width:700px){.sa-setting-row{grid-template-columns:1fr;gap:6px}.sa-settings-actions{margin-left:0}.sa-setting-row+.sa-setting-row{margin-top:4px}}
 `
 
 export async function apply(ctx: ClientContext): Promise<() => Promise<void>> {
@@ -440,6 +410,18 @@ export async function apply(ctx: ClientContext): Promise<() => Promise<void>> {
     return () => style.remove()
   }, 'session-assistant: client styles')
   const settings = () => settingsView.settings
+  const settingsListeners = new Set<() => void>()
+  const settingsStore: SettingsStore = {
+    getSnapshot: () => settingsView,
+    subscribe(listener) { settingsListeners.add(listener); return () => settingsListeners.delete(listener) },
+    async save(next) {
+      const result = await remote.save({ expectedRevision: settingsView.revision, settings: next })
+      if (!result.ok || !result.value) throw new Error(result.error?.message || t('settingsSaveFailed'))
+      settingsView = result.value
+      for (const listener of settingsListeners) listener()
+      return settingsView
+    },
+  }
   const controllers = new Map<string, VoiceController>()
   /** One shared wake-word listener per session; preemptible so an active voice session takes over cleanly. */
   let standbyHandle: RecognitionHandle | undefined
@@ -452,7 +434,7 @@ export async function apply(ctx: ClientContext): Promise<() => Promise<void>> {
         getInput: () => input.current,
         context: async draft => {
           const nextDraft = draft ?? input.current.draft
-          const local = buildBoundedContext(session.current, nextDraft, settings().openaiContextMode, metadata.current)
+          const local = `${buildBoundedContext(session.current, nextDraft, settings().openaiContextMode, metadata.current)}\n\n${assistantSettingsContext(settings())}`
           if (settings().openaiContextMode === 'off') return local
           try {
             const projected = await remote.context({
@@ -473,7 +455,7 @@ export async function apply(ctx: ClientContext): Promise<() => Promise<void>> {
         getSessionMetadata: () => metadata.current,
         startConversation: async (initialUserText, initialAudio) => {
           const nextDraft = input.current.draft
-          const local = buildBoundedContext(session.current, nextDraft, settings().openaiContextMode, metadata.current)
+          const local = `${buildBoundedContext(session.current, nextDraft, settings().openaiContextMode, metadata.current)}\n\n${assistantSettingsContext(settings())}`
           let knowledge = ''
           if (settings().openaiContextMode !== 'off') {
             try {
@@ -545,6 +527,8 @@ export async function apply(ctx: ClientContext): Promise<() => Promise<void>> {
           if (!result.ok || !result.value) throw new Error(result.error?.message || 'Knowledge curation failed')
           return result.value
         },
+        getSettings: settings,
+        updateSettings: async patch => (await settingsStore.save({ ...settings(), ...patch })).settings,
       })
       controllers.set(sessionId, controller)
     }
@@ -553,20 +537,17 @@ export async function apply(ctx: ClientContext): Promise<() => Promise<void>> {
   const injected = () => ({ controllerFor, settings, voiceAgent })
   ctx.slots.inject('conversation.input.right', () => ctx.slots.register({ name: 'conversation.input.right', id: 'session-assistant-microphone', order: 60, locale: NS, inject: injected }, MicControl as never))
   ctx.slots.inject('conversation.input.dock', () => ctx.slots.register({ name: 'conversation.input.dock', id: 'session-assistant-status', order: 60, locale: NS, inject: injected }, VoiceDock as never))
-  ctx.slots.inject('conversation.chat.assistant-actions', () => ctx.slots.register({ name: 'conversation.chat.assistant-actions', id: 'session-assistant-read-aloud', order: 60, locale: NS, inject: injected }, ReadAloudAction as never))
   ctx.slots.inject('settings.section', () => ctx.slots.register({ name: 'settings.section', id: 'session-assistant', order: 60, label: () => t('settingsTitle'), locale: NS }, (slotProps: { t: SessionAssistantTranslate }) => React.createElement(SettingsSection, {
-    view: settingsView,
+    store: settingsStore,
     models,
     voiceAgent,
     t: slotProps.t,
-    save: async (next: SessionAssistantSettings) => {
-      const result = await remote.save({ expectedRevision: settingsView.revision, settings: next })
-      if (!result.ok || !result.value) throw new Error(result.error?.message || t('settingsSaveFailed'))
-      settingsView = result.value
-      return settingsView
-    },
   })))
-  return async () => { for (const controller of controllers.values()) await controller.dispose(); controllers.clear(); await disposeRemote() }
+  return async () => {
+    for (const controller of controllers.values()) await controller.dispose()
+    controllers.clear()
+    await disposeRemote()
+  }
 }
 
 export { VoiceController, voiceConversationOptions }

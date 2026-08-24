@@ -1,5 +1,5 @@
 import type { SessionAssistantSettings } from '../settings.ts';
-import { type SessionContextMetadata } from './context.ts';
+import { type SessionContextMetadata, type UserAwarenessEvent } from './context.ts';
 export interface InputStateLike {
     readonly draft: string;
 }
@@ -13,7 +13,7 @@ export interface ActionEvent {
     name: string;
     arguments?: unknown;
 }
-export type ActionName = 'update_working_draft' | 'prepare_agent_handoff' | 'submit_to_agent' | 'end_voice_session' | 'organize_notes';
+export type ActionName = 'update_working_draft' | 'prepare_agent_handoff' | 'submit_to_agent' | 'end_voice_session' | 'organize_notes' | 'get_assistant_settings' | 'update_assistant_settings';
 export interface CurateRequest {
     readonly sessionId: string;
     readonly cwd?: string;
@@ -47,6 +47,8 @@ export interface ActionExecutorMap {
     submit_to_agent: ActionExecutor;
     end_voice_session: ActionExecutor;
     organize_notes: ActionExecutor;
+    get_assistant_settings: ActionExecutor;
+    update_assistant_settings: ActionExecutor;
 }
 export type VoiceEvent = {
     type: 'status';
@@ -102,6 +104,10 @@ export interface ControllerState {
     } | undefined;
     /** The primary Agent produced a new reply after the voice submission. */
     readonly agentReply?: boolean | undefined;
+    /** Latest significant primary-Agent plan milestone projected from todo_write. */
+    readonly planNotice?: Extract<UserAwarenessEvent, {
+        type: 'plan_updated';
+    }> | undefined;
     /** Latest knowledge-curation outcome (organize_notes), announced when it lands. */
     readonly curatorNotice?: {
         readonly ok: boolean;
@@ -119,7 +125,7 @@ export interface ControllerDependencies {
         readonly sampleRate: number;
     }) => Promise<VoiceConversation> | VoiceConversation;
     readonly dictation?: boolean | (() => boolean);
-    /** Called by the UI whenever the current-session snapshot changes (detects primary-Agent questions and replies). */
+    /** Called by the UI whenever the current-session snapshot changes (detects user-awareness events and replies). */
     readonly observeSession?: (snapshot: unknown) => void;
     /** Read the latest current-session snapshot (for submission baseline tracking). */
     readonly getSession?: () => unknown;
@@ -143,7 +149,16 @@ export interface ControllerDependencies {
      * it lands. Undefined when no curator remote is available.
      */
     readonly curate?: (request: CurateRequest) => Promise<CurateResult>;
+    /** Read and atomically update this assistant's persisted, non-secret configuration. */
+    readonly getSettings?: () => SessionAssistantSettings;
+    readonly updateSettings?: (patch: Partial<SessionAssistantSettings>) => Promise<SessionAssistantSettings>;
+    /** User-facing event sink. The product may route it to UI, voice, or both. */
+    readonly notifyAwareness?: (event: Exclude<UserAwarenessEvent, {
+        visibility: 'internal';
+    }>) => void;
 }
+/** Safe configuration projection for the voice model; contains no credentials. */
+export declare function assistantSettingsContext(settings: SessionAssistantSettings): string;
 /** Diagnostic tracing for the tool/submit flow; harmless no-op when the console is unavailable. */
 export declare function saLog(detail: string, extra?: unknown): void;
 export declare class VoiceController {
@@ -160,7 +175,8 @@ export declare class VoiceController {
     private discussion;
     /** Discussion snapshot at the last successful curation; only the delta after it is re-curated. */
     private lastCuratedDiscussion;
-    private readonly seenQuestions;
+    private readonly seenAwarenessEvents;
+    private lastPlan;
     private readonly disposeTools;
     private state;
     private readonly listeners;
@@ -183,10 +199,13 @@ export declare class VoiceController {
     get canEnterStandby(): boolean;
     /**
      * Observe the current-session snapshot (called by the UI on every session change):
-     * surfaces primary-Agent human-in-the-loop questions and reply completion in the
-     * status bar — no synthetic TTS announcements.
+     * projects tool calls and delegated-Agent messages into semantic awareness
+     * events. Internal child reports remain silent; the primary Agent decides
+     * whether their content becomes user-facing. Blocking questions and
+     * significant plan milestones are sent to the configured UI/voice sink.
      */
     observeSession(snapshot: unknown): void;
+    private notifyAwareness;
     consume(event: VoiceEvent): Promise<void>;
     private appendDiscussion;
     private appendDictation;
@@ -198,6 +217,7 @@ export declare class VoiceController {
      * best-effort context refresh that never blocks the tool flow.
      */
     executeTool(name: ActionName, args: unknown, control: ActionControl): Promise<void>;
+    private configureAssistant;
     /**
      * Delegate knowledge curation to the dedicated text-model curator agent.
      * The tool result is settled immediately (the model keeps speaking and the
@@ -222,9 +242,11 @@ export declare function voiceConversationOptions(settings: SessionAssistantSetti
     context: string;
     language: import("../settings-values.ts").RecognitionLanguage;
 };
-/** Open a full-duplex preview session using the actual selected Realtime model/voice. */
+/** Open an interactive audition using the selected Realtime model and voice. */
 export declare function voiceAgentPreviewOptions(settings: SessionAssistantSettings, routeId?: string): {
     routeId: string;
     profileId: string;
+    outputOnly: boolean;
+    previewText: string;
 };
 //# sourceMappingURL=controller.d.ts.map

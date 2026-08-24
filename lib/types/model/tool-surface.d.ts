@@ -89,6 +89,56 @@ export declare const ORGANIZE_NOTES_TOOL: {
         required: never[];
     };
 };
+export declare const GET_ASSISTANT_SETTINGS_TOOL: {
+    type: string;
+    name: string;
+    strict: boolean;
+    description: string;
+    parameters: {
+        type: string;
+        additionalProperties: boolean;
+        properties: {};
+    };
+};
+export declare const UPDATE_ASSISTANT_SETTINGS_TOOL: {
+    type: string;
+    name: string;
+    strict: boolean;
+    description: string;
+    parameters: {
+        type: string;
+        additionalProperties: boolean;
+        properties: {
+            recognitionProvider: {
+                type: string;
+                enum: string[];
+            };
+            recognitionLang: {
+                type: string;
+                enum: string[];
+            };
+            openaiRealtimeModel: {
+                type: string;
+            };
+            openaiRealtimeVoice: {
+                type: string;
+                enum: string[];
+            };
+            doubaoRealtimeModel: {
+                type: string;
+            };
+            openaiContextMode: {
+                type: string;
+                enum: string[];
+            };
+            wakeWord: {
+                type: string;
+                maxLength: number;
+            };
+        };
+        required: never[];
+    };
+};
 export declare const SESSION_ASSISTANT_TOOLS: {
     type: string;
     name: string;
@@ -114,5 +164,7 @@ export declare const SESSION_ASSISTANT_TOOL_OUTPUT: {
         required: never[];
     };
     organize_notes: {};
+    get_assistant_settings: {};
+    update_assistant_settings: {};
 };
 //# sourceMappingURL=tool-surface.d.ts.map

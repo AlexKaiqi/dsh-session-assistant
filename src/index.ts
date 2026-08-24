@@ -11,7 +11,9 @@ export { Config, OPENAI_REALTIME_VOICES, PROMPT, SESSION_ASSISTANT_TOOLS, SESSIO
 export * from './migration.ts'
 export * from './settings.ts'
 export * from './settings-remote.ts'
-export { buildBoundedContext } from './client/context.ts'
+export { sessionAssistantRemoteDescriptors } from './remote-contract.ts'
+export { awarenessEventsInSession, buildBoundedContext } from './client/context.ts'
+export type { PlanItem, PlanItemStatus, UserAwarenessEvent } from './client/context.ts'
 export const name = 'dsh-session-assistant'
 export const inject = ['settings', 'realtimeModelRuntime']
 
@@ -29,10 +31,15 @@ export function sessionProfile({ id = 'session-assistant', openaiVoice }: { id?:
 }
 
 export function previewProfile({ id = 'session-assistant-preview', openaiVoice }: { id?: string; openaiVoice?: string } = {}) {
-  // The full-duplex preview behaves like the Session Assistant (same PROMPT
-  // instructions) but registers no tools, so the user can ask it questions
-  // without triggering any draft/submit machinery.
-  return { id, instructions: realtimeEditorInstructions, tools: [], voice: openaiVoice ? { openai: openaiVoice } : {} }
+  // OpenAI Realtime receives previewText as a user text turn. Doubao Duplex
+  // needs a short injected audio cue to initiate the first response, then the
+  // live microphone takes over so the audition remains a real conversation.
+  return {
+    id,
+    instructions: () => 'This is an interactive voice audition. Greet the user briefly on the first turn, then continue a natural spoken conversation so they can judge the selected voice. Keep replies concise. Do not call tools.',
+    tools: [],
+    voice: openaiVoice ? { openai: openaiVoice } : {},
+  }
 }
 
 export function sessionProfiles() {

@@ -37,13 +37,7 @@ export declare const TYPERT: {
                             draft: "draft";
                             recent: "recent";
                         }>;
-                        autoSpeak: import("zod").ZodBoolean;
-                        autoSpeakMode: import("zod").ZodEnum<{
-                            final: "final";
-                            all: "all";
-                        }>;
-                        voiceName: import("zod").ZodString;
-                        rate: import("zod").ZodNumber;
+                        wakeWord: import("zod").ZodString;
                     }, import("zod/v4/core").$strict>;
                 }, import("zod/v4/core").$strict>;
             };
@@ -72,13 +66,7 @@ export declare const TYPERT: {
                         draft: "draft";
                         recent: "recent";
                     }>;
-                    autoSpeak: import("zod").ZodBoolean;
-                    autoSpeakMode: import("zod").ZodEnum<{
-                        final: "final";
-                        all: "all";
-                    }>;
-                    voiceName: import("zod").ZodString;
-                    rate: import("zod").ZodNumber;
+                    wakeWord: import("zod").ZodString;
                 }, import("zod/v4/core").$strict>;
             }, import("zod/v4/core").$strict>;
         };

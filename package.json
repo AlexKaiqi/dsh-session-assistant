@@ -1,6 +1,6 @@
 {
   "name": "dsh-session-assistant",
-  "version": "0.4.1",
+  "version": "0.4.5",
   "description": "Session-scoped full-duplex voice assistant with tool-controlled drafting and Agent submission for DeepSeek Harness.",
   "publishConfig": {
     "access": "public",
@@ -58,7 +58,6 @@
     "multilingual",
     "deliberation",
     "drafting",
-    "read-aloud",
     "free",
     "zh-CN"
   ],

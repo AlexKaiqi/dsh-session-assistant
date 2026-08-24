@@ -7,10 +7,7 @@ const settingsSchema = z.object({
   openaiRealtimeVoice: z.string(),
   doubaoRealtimeModel: z.string(),
   openaiContextMode: z.enum(['off', 'draft', 'recent']),
-  autoSpeak: z.boolean(),
-  autoSpeakMode: z.enum(['final', 'all']),
-  voiceName: z.string(),
-  rate: z.number(),
+  wakeWord: z.string(),
 }).strict()
 
 const viewSchema = z.object({

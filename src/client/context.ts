@@ -60,73 +60,212 @@ export function buildBoundedContext(session: SessionSnapshotLike, draft: string,
   return sections.join('\n\n').slice(0, 5_200)
 }
 
-export function messageText(session: SessionSnapshotLike, messageId: string): string {
-  const nodes = session.chat?.nodes
-  if (!nodes || !messageId) return ''
-  for (const value of nodes.values()) {
-    const node = value as {
-      data?: {
-        closing?: { blocks?: unknown; finalNode?: { messageId?: string; blocks?: unknown } }
-        blocks?: unknown
-        content?: unknown
-        messageId?: string
-      }
-    }
-    const closing = node.data?.closing
-    if (closing?.finalNode?.messageId === messageId) {
-      return blockText(closing.blocks ?? closing.finalNode.blocks).trim().slice(0, 12_000)
-    }
-    if (node.data?.messageId === messageId) return blockText(node.data.blocks ?? node.data.content).trim().slice(0, 12_000)
-  }
-  return ''
-}
-
 /** One pending human-in-the-loop question asked by the primary Agent. */
 export interface PendingQuestion { readonly callId: string; readonly text: string }
 
-function nodeEntries(session: SessionSnapshotLike): { kind?: string; visibility?: string; data?: { blocks?: unknown; status?: string } }[] {
+export type PlanItemStatus = 'pending' | 'in_progress' | 'completed'
+export interface PlanItem { readonly content: string; readonly status: PlanItemStatus }
+
+/**
+ * Semantic events projected from the Session log. Tool names and Agent message
+ * framing stay in this adapter layer; voice/UI consumers only see this small
+ * user-awareness vocabulary.
+ */
+export type UserAwarenessEvent =
+  | {
+      readonly id: string
+      readonly type: 'user_input_required'
+      readonly source: 'tool'
+      readonly visibility: 'user'
+      readonly voicePolicy: 'interrupt'
+      readonly callId: string
+      readonly text: string
+    }
+  | {
+      readonly id: string
+      readonly type: 'plan_updated'
+      readonly source: 'tool'
+      readonly visibility: 'user'
+      readonly voicePolicy: 'summary'
+      readonly callId: string
+      readonly items: readonly PlanItem[]
+      readonly active: readonly string[]
+      readonly pending: number
+      readonly completed: number
+      readonly total: number
+      readonly phase: 'planned' | 'in_progress' | 'completed'
+    }
+  | {
+      readonly id: string
+      readonly type: 'agent_report'
+      readonly source: 'agent'
+      readonly visibility: 'internal'
+      readonly voicePolicy: 'silent'
+      readonly senderSessionId?: string
+      readonly text: string
+    }
+
+interface SessionNodeEntry {
+  readonly id: string
+  readonly kind?: string
+  readonly visibility?: string
+  readonly data?: {
+    readonly blocks?: unknown
+    readonly status?: string
+    readonly content?: unknown
+    readonly source?: unknown
+    readonly messageId?: unknown
+  }
+}
+
+function nodeEntries(session: SessionSnapshotLike): SessionNodeEntry[] {
   const nodes = session.chat?.nodes
   if (!nodes) return []
-  const entries: { kind?: string; visibility?: string; data?: { blocks?: unknown; status?: string } }[] = []
-  for (const value of nodes.values()) entries.push(value as { kind?: string; visibility?: string; data?: { blocks?: unknown; status?: string } })
+  const entries: SessionNodeEntry[] = []
+  const seen = new Set<string>()
+  for (const id of session.chat?.order ?? []) {
+    const value = nodes.get(id)
+    if (value === undefined) continue
+    seen.add(id)
+    entries.push({ id, ...(value as Omit<SessionNodeEntry, 'id'>) })
+  }
+  for (const [id, value] of nodes.entries()) {
+    if (!seen.has(id)) entries.push({ id, ...(value as Omit<SessionNodeEntry, 'id'>) })
+  }
   return entries
 }
 
-function questionText(argumentsRaw: unknown): string {
-  if (typeof argumentsRaw !== 'string') return ''
+function argumentsObject(argumentsRaw: unknown): Record<string, unknown> | undefined {
+  if (argumentsRaw !== null && typeof argumentsRaw === 'object' && !Array.isArray(argumentsRaw)) return argumentsRaw as Record<string, unknown>
+  if (typeof argumentsRaw !== 'string') return undefined
   try {
     const parsed: unknown = JSON.parse(argumentsRaw)
-    const questions = (parsed as { questions?: unknown })?.questions
-    if (!Array.isArray(questions)) return ''
-    return questions.map(entry => {
-      const question = entry as { question?: unknown; options?: unknown }
-      const stem = typeof question.question === 'string' ? question.question : ''
-      const options = Array.isArray(question.options) && question.options.length
-        ? `（选项：${question.options.map(option => (option as { label?: unknown })?.label).filter(label => typeof label === 'string').join(' / ')}）`
-        : ''
-      return `${stem}${options}`.trim()
-    }).filter(Boolean).join(' ')
-  } catch { return '' }
+    return parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : undefined
+  } catch { return undefined }
 }
 
-/** Find every `ask_user_question` tool call in the session snapshot with its readable text. */
-export function questionsInSession(session: SessionSnapshotLike): PendingQuestion[] {
-  const questions: PendingQuestion[] = []
+function questionText(argumentsRaw: unknown): string {
+  const questions = argumentsObject(argumentsRaw)?.questions
+  if (!Array.isArray(questions)) return ''
+  return questions.map(entry => {
+    const question = entry as { question?: unknown; options?: unknown }
+    const stem = typeof question.question === 'string' ? question.question.trim().slice(0, 1_000) : ''
+    const labels = Array.isArray(question.options)
+      ? question.options.map(option => (option as { label?: unknown })?.label).filter((label): label is string => typeof label === 'string' && label.trim() !== '').map(label => label.trim().slice(0, 120))
+      : []
+    const options = labels.length ? `（选项：${labels.join(' / ')}）` : ''
+    return `${stem}${options}`.trim()
+  }).filter(Boolean).join(' ').slice(0, 3_000)
+}
+
+function planEvent(callId: string, argumentsRaw: unknown): Extract<UserAwarenessEvent, { type: 'plan_updated' }> | undefined {
+  const todos = argumentsObject(argumentsRaw)?.todos
+  if (!Array.isArray(todos)) return undefined
+  const items: PlanItem[] = []
+  for (const entry of todos.slice(0, 50)) {
+    const item = entry as { content?: unknown; status?: unknown }
+    if (typeof item.content !== 'string' || (item.status !== 'pending' && item.status !== 'in_progress' && item.status !== 'completed')) return undefined
+    const content = item.content.trim().slice(0, 500)
+    if (!content) return undefined
+    items.push({ content, status: item.status })
+  }
+  if (!items.length) return undefined
+  const active = items.filter(item => item.status === 'in_progress').map(item => item.content)
+  const completed = items.filter(item => item.status === 'completed').length
+  const pending = items.filter(item => item.status === 'pending').length
+  const phase = items.length > 0 && completed === items.length ? 'completed' : active.length > 0 ? 'in_progress' : 'planned'
+  return {
+    id: `tool:${callId}`,
+    type: 'plan_updated',
+    source: 'tool',
+    visibility: 'user',
+    voicePolicy: 'summary',
+    callId,
+    items,
+    active,
+    pending,
+    completed,
+    total: items.length,
+    phase,
+  }
+}
+
+interface ToolCallCandidate {
+  readonly kind?: unknown
+  readonly type?: unknown
+  readonly name?: unknown
+  readonly callId?: unknown
+  readonly id?: unknown
+  readonly arguments?: unknown
+  readonly argsRaw?: unknown
+}
+
+type ToolAwarenessMapper = (callId: string, argumentsRaw: unknown) => UserAwarenessEvent | undefined
+
+/** Existing tools use adapters here; future tools can add one without depending on voice. */
+const TOOL_AWARENESS_MAPPERS: Readonly<Record<string, ToolAwarenessMapper>> = {
+  ask_user_question: (callId, argumentsRaw) => {
+    const text = questionText(argumentsRaw)
+    return text ? {
+      id: `tool:${callId}`,
+      type: 'user_input_required',
+      source: 'tool',
+      visibility: 'user',
+      voicePolicy: 'interrupt',
+      callId,
+      text,
+    } : undefined
+  },
+  todo_write: planEvent,
+}
+
+function toolAwarenessEvent(block: unknown): UserAwarenessEvent | undefined {
+  const candidate = block as ToolCallCandidate
+  if ((candidate?.kind ?? candidate?.type) !== 'tool-call' || typeof candidate.name !== 'string') return undefined
+  const callId = typeof candidate.callId === 'string' ? candidate.callId : typeof candidate.id === 'string' ? candidate.id : ''
+  if (!callId) return undefined
+  return TOOL_AWARENESS_MAPPERS[candidate.name]?.(callId, candidate.arguments ?? candidate.argsRaw)
+}
+
+function agentReportEvent(node: SessionNodeEntry): Extract<UserAwarenessEvent, { type: 'agent_report' }> | undefined {
+  if ((node.kind !== 'user' && node.kind !== 'steering') || node.visibility === 'hidden') return undefined
+  const source = node.data?.source as { kind?: unknown; senderSessionId?: unknown } | undefined
+  if (source?.kind !== 'subagent-report') return undefined
+  const text = blockText(node.data?.content).replace(/^Background subagent\s+\S+\s+reported:\s*/i, '').trim().slice(0, 4_000)
+  const messageId = typeof node.data?.messageId === 'string' ? node.data.messageId : node.id
+  return {
+    id: `agent:${messageId}`,
+    type: 'agent_report',
+    source: 'agent',
+    visibility: 'internal',
+    voicePolicy: 'silent',
+    ...(typeof source.senderSessionId === 'string' ? { senderSessionId: source.senderSessionId } : {}),
+    text,
+  }
+}
+
+/** Project tool calls and delegated-Agent reports into one semantic event stream. */
+export function awarenessEventsInSession(session: SessionSnapshotLike): UserAwarenessEvent[] {
+  const events: UserAwarenessEvent[] = []
   for (const node of nodeEntries(session)) {
+    const report = agentReportEvent(node)
+    if (report) events.push(report)
     if (node.kind !== 'assistant-step' || node.visibility === 'hidden') continue
     const blocks = node.data?.blocks
     if (!Array.isArray(blocks)) continue
     for (const block of blocks) {
-      // Snapshot blocks are UI-classified: { kind: 'tool-call', callId, name, argsRaw }.
-      // Raw event blocks use { type: 'tool-call', id, name, arguments }.
-      const candidate = block as { kind?: unknown; type?: unknown; name?: unknown; callId?: unknown; id?: unknown; arguments?: unknown; argsRaw?: unknown }
-      if ((candidate?.kind ?? candidate?.type) !== 'tool-call' || candidate.name !== 'ask_user_question') continue
-      const callId = typeof candidate.callId === 'string' ? candidate.callId : typeof candidate.id === 'string' ? candidate.id : ''
-      const text = questionText(candidate.arguments ?? candidate.argsRaw)
-      if (callId && text) questions.push({ callId, text })
+      const event = toolAwarenessEvent(block)
+      if (event) events.push(event)
     }
   }
-  return questions
+  return events
+}
+
+/** Find every `ask_user_question` tool call in the session snapshot with its readable text. */
+export function questionsInSession(session: SessionSnapshotLike): PendingQuestion[] {
+  return awarenessEventsInSession(session)
+    .filter((event): event is Extract<UserAwarenessEvent, { type: 'user_input_required' }> => event.type === 'user_input_required')
+    .map(event => ({ callId: event.callId, text: event.text }))
 }
 
 /** Count finished assistant steps (primary-Agent turns) in the session snapshot. */

@@ -1,5 +1,5 @@
 {
-  "version": 10,
+  "version": 11,
   "profileId": "session-assistant",
   "settingsNamespace": "session-assistant",
   "settingsRemote": "sessionAssistantSettings",
@@ -17,7 +17,6 @@
   "slots": [
     "conversation.input.right",
     "conversation.input.dock",
-    "conversation.chat.assistant-actions",
     "settings.section"
   ],
   "scope": "current-session",

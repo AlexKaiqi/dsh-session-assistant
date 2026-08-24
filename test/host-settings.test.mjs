@@ -10,6 +10,8 @@ test('model contract keeps the voice role bounded and exposes exact tool/result 
   assert.match(mod.PROMPT, /cannot execute tasks/)
   assert.match(mod.PROMPT, /Classify each user turn/)
   assert.match(mod.PROMPT, /explicit affirmative reply/)
+  assert.match(mod.PROMPT, /immediate, short spoken acknowledgement/)
+  assert.match(mod.PROMPT, /modify your own non-secret configuration/)
   assert.ok(mod.Config)
   assert.deepEqual(mod.SESSION_ASSISTANT_TOOLS.map(tool => tool.name), [
     'update_working_draft',
@@ -17,6 +19,8 @@ test('model contract keeps the voice role bounded and exposes exact tool/result 
     'submit_to_agent',
     'end_voice_session',
     'organize_notes',
+    'get_assistant_settings',
+    'update_assistant_settings',
   ])
   assert.deepEqual(mod.SESSION_ASSISTANT_TOOL_OUTPUT, {
     update_working_draft: { required: ['draft', 'summary', 'status'] },
@@ -24,6 +28,8 @@ test('model contract keeps the voice role bounded and exposes exact tool/result 
     submit_to_agent: { required: ['draft'] },
     end_voice_session: { required: [] },
     organize_notes: {},
+    get_assistant_settings: {},
+    update_assistant_settings: {},
   })
 })
 
@@ -42,7 +48,7 @@ test('legacy migration uses first valid candidate, keeps only normalized declare
     assert.equal(await mod.migrateLegacySettings(settings, [invalid, valid]), true)
     assert.deepEqual(replaced[0].slice(0, 1), [mod.SETTINGS_NAMESPACE])
     assert.equal(replaced[0][1].recognitionProvider, 'browser')
-    assert.equal(replaced[0][1].rate, 2)
+    assert.equal('rate' in replaced[0][1], false)
     assert.equal('realtimeModels' in replaced[0][1], false)
     assert.equal(replaced[0][2], 4)
   } finally { await rm(dir, { recursive: true, force: true }) }
@@ -50,7 +56,7 @@ test('legacy migration uses first valid candidate, keeps only normalized declare
 
 test('migration guard is idempotent and skips every legacy filesystem read after a user override exists', async () => {
   let read = false
-  const settings = { describe() { return [{ ns: mod.SETTINGS_NAMESPACE, user: { rate: 1 } }] } }
+  const settings = { describe() { return [{ ns: mod.SETTINGS_NAMESPACE, user: { wakeWord: '助手' } }] } }
   assert.equal(await mod.migrateLegacySettings(settings, ['legacy'], () => { read = true; return '{}' }), false)
   assert.equal(read, false)
 })
@@ -84,10 +90,18 @@ test('settings Remote saves a closed normalized schema with expected revision', 
   remote.scope = scope
   const view = await remote.save({ expectedRevision: 7, settings: { ...mod.DEFAULT_SETTINGS, rate: 9, unknown: 'drop' } })
   assert.deepEqual(calls[0].slice(0, 1), [mod.SETTINGS_NAMESPACE])
-  assert.equal(calls[0][1].rate, 2)
+  assert.equal('rate' in calls[0][1], false)
   assert.equal('unknown' in calls[0][1], false)
   assert.equal(calls[0][2], 7)
   assert.equal(view.revision, 7)
+})
+
+test('strict Remote settings schema accepts every declared setting, including wakeWord', async () => {
+  const descriptors = mod.sessionAssistantRemoteDescriptors()
+  const describe = descriptors.find(entry => entry.method === 'describe')
+  const parsed = describe.result.schema.parse({ revision: 1, writable: true, settings: mod.DEFAULT_SETTINGS })
+  assert.equal(parsed.settings.wakeWord, '你好助手')
+  for (const removed of ['autoSpeak', 'autoSpeakMode', 'voiceName', 'rate']) assert.equal(removed in parsed.settings, false)
 })
 
 test('settings Remote projects optional Personal Knowledge with bounded inputs and honest absence', async () => {

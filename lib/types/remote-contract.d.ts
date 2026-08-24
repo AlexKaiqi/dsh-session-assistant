@@ -34,13 +34,7 @@ export declare function sessionAssistantRemoteDescriptors(): ({
                         draft: "draft";
                         recent: "recent";
                     }>;
-                    autoSpeak: z.ZodBoolean;
-                    autoSpeakMode: z.ZodEnum<{
-                        final: "final";
-                        all: "all";
-                    }>;
-                    voiceName: z.ZodString;
-                    rate: z.ZodNumber;
+                    wakeWord: z.ZodString;
                 }, z.core.$strict>;
             }, z.core.$strict>;
         };
@@ -69,13 +63,7 @@ export declare function sessionAssistantRemoteDescriptors(): ({
                     draft: "draft";
                     recent: "recent";
                 }>;
-                autoSpeak: z.ZodBoolean;
-                autoSpeakMode: z.ZodEnum<{
-                    final: "final";
-                    all: "all";
-                }>;
-                voiceName: z.ZodString;
-                rate: z.ZodNumber;
+                wakeWord: z.ZodString;
             }, z.core.$strict>;
         }, z.core.$strict>;
     };

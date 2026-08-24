@@ -26,7 +26,7 @@
   "tests": {
     "contractTests": [
       { "file": "test/host-settings.test.mjs", "references": ["PROMPT", "Config", "SETTINGS_NAMESPACE", "SESSION_ASSISTANT_TOOLS", "SESSION_ASSISTANT_TOOL_OUTPUT"] },
-      { "file": "test/client-contract.test.mjs", "references": ["conversation.input.right", "conversation.input.dock", "conversation.chat.assistant-actions", "settings.section"] }
+      { "file": "test/client-contract.test.mjs", "references": ["conversation.input.right", "conversation.input.dock", "settings.section"] }
     ],
     "runtimeTests": [
       { "file": "test/client-controller.test.mjs", "layer": "L1" },

@@ -8,7 +8,9 @@ export { Config, OPENAI_REALTIME_VOICES, PROMPT, SESSION_ASSISTANT_TOOLS, SESSIO
 export * from './migration.ts';
 export * from './settings.ts';
 export * from './settings-remote.ts';
-export { buildBoundedContext } from './client/context.ts';
+export { sessionAssistantRemoteDescriptors } from './remote-contract.ts';
+export { awarenessEventsInSession, buildBoundedContext } from './client/context.ts';
+export type { PlanItem, PlanItemStatus, UserAwarenessEvent } from './client/context.ts';
 export declare const name = "dsh-session-assistant";
 export declare const inject: string[];
 export declare function realtimeEditorInstructions(context?: string): string;
@@ -41,7 +43,7 @@ export declare function previewProfile({ id, openaiVoice }?: {
     openaiVoice?: string;
 }): {
     id: string;
-    instructions: typeof realtimeEditorInstructions;
+    instructions: () => string;
     tools: never[];
     voice: {
         openai: string;

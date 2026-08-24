@@ -1,10 +1,11 @@
 import type { SessionAssistantSettings } from '../settings.ts'
-import { countAssistantSteps, questionsInSession, type SessionContextMetadata, type SessionSnapshotLike } from './context.ts'
+import { DECLARED_SETTINGS_FIELDS, normalizeSettings } from '../settings-values.ts'
+import { awarenessEventsInSession, countAssistantSteps, type SessionContextMetadata, type SessionSnapshotLike, type UserAwarenessEvent } from './context.ts'
 
 export interface InputStateLike { readonly draft: string }
 export interface InputActionsLike { setDraft(text: string): void; submit(): void }
 export interface ActionEvent { type: 'action'; callId: string; name: string; arguments?: unknown }
-export type ActionName = 'update_working_draft' | 'prepare_agent_handoff' | 'submit_to_agent' | 'end_voice_session' | 'organize_notes'
+export type ActionName = 'update_working_draft' | 'prepare_agent_handoff' | 'submit_to_agent' | 'end_voice_session' | 'organize_notes' | 'get_assistant_settings' | 'update_assistant_settings'
 
 export interface CurateRequest {
   readonly sessionId: string
@@ -41,6 +42,8 @@ export interface ActionExecutorMap {
   submit_to_agent: ActionExecutor
   end_voice_session: ActionExecutor
   organize_notes: ActionExecutor
+  get_assistant_settings: ActionExecutor
+  update_assistant_settings: ActionExecutor
 }
 export type VoiceEvent =
   | { type: 'status'; connected?: boolean; status: string }
@@ -75,6 +78,8 @@ export interface ControllerState {
   readonly question?: { readonly callId: string; readonly text: string } | undefined
   /** The primary Agent produced a new reply after the voice submission. */
   readonly agentReply?: boolean | undefined
+  /** Latest significant primary-Agent plan milestone projected from todo_write. */
+  readonly planNotice?: Extract<UserAwarenessEvent, { type: 'plan_updated' }> | undefined
   /** Latest knowledge-curation outcome (organize_notes), announced when it lands. */
   readonly curatorNotice?: { readonly ok: boolean; readonly proposals: number; readonly error?: string } | undefined
 }
@@ -86,7 +91,7 @@ export interface ControllerDependencies {
   readonly context: (draft?: string) => string | Promise<string>
   readonly startConversation: (initialUserText?: string, initialAudio?: { readonly pcm16Base64: string; readonly sampleRate: number }) => Promise<VoiceConversation> | VoiceConversation
   readonly dictation?: boolean | (() => boolean)
-  /** Called by the UI whenever the current-session snapshot changes (detects primary-Agent questions and replies). */
+  /** Called by the UI whenever the current-session snapshot changes (detects user-awareness events and replies). */
   readonly observeSession?: (snapshot: unknown) => void
   /** Read the latest current-session snapshot (for submission baseline tracking). */
   readonly getSession?: () => unknown
@@ -107,6 +112,22 @@ export interface ControllerDependencies {
    * it lands. Undefined when no curator remote is available.
    */
   readonly curate?: (request: CurateRequest) => Promise<CurateResult>
+  /** Read and atomically update this assistant's persisted, non-secret configuration. */
+  readonly getSettings?: () => SessionAssistantSettings
+  readonly updateSettings?: (patch: Partial<SessionAssistantSettings>) => Promise<SessionAssistantSettings>
+  /** User-facing event sink. The product may route it to UI, voice, or both. */
+  readonly notifyAwareness?: (event: Exclude<UserAwarenessEvent, { visibility: 'internal' }>) => void
+}
+
+const SETTINGS_APPLICATION = {
+  realtimeConnection: 'recognitionProvider, recognitionLang, openaiRealtimeModel, openaiRealtimeVoice, and doubaoRealtimeModel apply when the next voice connection starts',
+  standby: 'wakeWord applies when standby is entered again; long-press the microphone button to enter standby',
+  context: 'openaiContextMode applies when context is next projected into the voice session',
+} as const
+
+/** Safe configuration projection for the voice model; contains no credentials. */
+export function assistantSettingsContext(settings: SessionAssistantSettings): string {
+  return `[Session Assistant configuration — non-secret]\n${JSON.stringify(settings)}\nApplication rules: ${Object.values(SETTINGS_APPLICATION).join('; ')}.`
 }
 
 function parseArguments(value: unknown): Record<string, unknown> | undefined {
@@ -134,6 +155,15 @@ export function saLog(detail: string, extra?: unknown): void {
   } catch { /* logging must never break the voice loop */ }
 }
 
+function significantPlanChange(
+  previous: Extract<UserAwarenessEvent, { type: 'plan_updated' }> | undefined,
+  next: Extract<UserAwarenessEvent, { type: 'plan_updated' }>,
+): boolean {
+  if (!previous) return true
+  if (previous.phase !== next.phase || previous.completed !== next.completed || previous.total !== next.total) return true
+  return previous.active.join('\n') !== next.active.join('\n')
+}
+
 export class VoiceController {
   private handle: VoiceConversation | undefined
   private unsubscribe: (() => void) | undefined
@@ -147,7 +177,8 @@ export class VoiceController {
   private discussion = ''
   /** Discussion snapshot at the last successful curation; only the delta after it is re-curated. */
   private lastCuratedDiscussion = ''
-  private readonly seenQuestions = new Set<string>()
+  private readonly seenAwarenessEvents = new Set<string>()
+  private lastPlan: Extract<UserAwarenessEvent, { type: 'plan_updated' }> | undefined
   private readonly disposeTools: () => void
   private state: ControllerState = { status: 'idle', phase: 'idle', transcript: '', draftStatus: 'drafting' }
   private readonly listeners = new Set<() => void>()
@@ -161,6 +192,8 @@ export class VoiceController {
       submit_to_agent: { execute: (args, control) => this.executeTool('submit_to_agent', args, control) },
       end_voice_session: { execute: (args, control) => this.executeTool('end_voice_session', args, control) },
       organize_notes: { execute: (args, control) => this.executeTool('organize_notes', args, control) },
+      get_assistant_settings: { execute: (args, control) => this.executeTool('get_assistant_settings', args, control) },
+      update_assistant_settings: { execute: (args, control) => this.executeTool('update_assistant_settings', args, control) },
     })
   }
   get sessionId(): string { return this.deps.sessionId }
@@ -175,9 +208,10 @@ export class VoiceController {
     this.deps.standby?.exit()
     const generation = ++this.generation
     this.discussion = ''
+    this.lastPlan = undefined
     this.baseline = this.deps.getInput().draft
     this.lastApplied = this.baseline
-    this.publish({ status: 'opening', phase: 'connecting', transcript: '', error: undefined, errorCode: undefined, handoff: undefined, submitNotice: undefined, question: undefined, agentReply: undefined })
+    this.publish({ status: 'opening', phase: 'connecting', transcript: '', error: undefined, errorCode: undefined, handoff: undefined, submitNotice: undefined, question: undefined, agentReply: undefined, planNotice: undefined })
     try {
       const handle = await this.deps.startConversation(initialUserText.trim().slice(0, 20_000), initialAudio)
       if (this.disposed || generation !== this.generation) { await handle.end(); return }
@@ -201,7 +235,7 @@ export class VoiceController {
     this.handle = undefined
     this.deps.standby?.exit()
     if (handle !== undefined) await handle.end()
-    if (!this.disposed) this.publish({ status: 'idle', phase: 'idle', transcript: '', error: undefined, errorCode: undefined, handoff: undefined, submitNotice: undefined, question: undefined, agentReply: undefined })
+    if (!this.disposed) this.publish({ status: 'idle', phase: 'idle', transcript: '', error: undefined, errorCode: undefined, handoff: undefined, submitNotice: undefined, question: undefined, agentReply: undefined, planNotice: undefined })
   }
 
   async dispose(): Promise<void> {
@@ -221,7 +255,7 @@ export class VoiceController {
   async enterStandby(): Promise<boolean> {
     if (this.disposed || this.handle !== undefined || this.state.status === 'opening') return false
     if (!this.deps.standby || !this.deps.standby.enter()) return false
-    this.publish({ status: 'standby', phase: 'idle', transcript: '', error: undefined, errorCode: undefined, question: undefined, agentReply: undefined })
+    this.publish({ status: 'standby', phase: 'idle', transcript: '', error: undefined, errorCode: undefined, question: undefined, agentReply: undefined, planNotice: undefined })
     saLog('standby entered')
     return true
   }
@@ -239,18 +273,34 @@ export class VoiceController {
 
   /**
    * Observe the current-session snapshot (called by the UI on every session change):
-   * surfaces primary-Agent human-in-the-loop questions and reply completion in the
-   * status bar — no synthetic TTS announcements.
+   * projects tool calls and delegated-Agent messages into semantic awareness
+   * events. Internal child reports remain silent; the primary Agent decides
+   * whether their content becomes user-facing. Blocking questions and
+   * significant plan milestones are sent to the configured UI/voice sink.
    */
   observeSession(snapshot: unknown): void {
     if (this.disposed) return
-    const questions = questionsInSession(snapshot as SessionSnapshotLike)
-    for (const question of questions) {
-      if (this.seenQuestions.has(question.callId)) continue
-      this.seenQuestions.add(question.callId)
-      this.publish({ question })
-      saLog(`primary-agent question ${question.callId}: ${question.text.slice(0, 120)}`)
-      break
+    for (const event of awarenessEventsInSession(snapshot as SessionSnapshotLike)) {
+      if (this.seenAwarenessEvents.has(event.id)) continue
+      this.seenAwarenessEvents.add(event.id)
+      if (event.type === 'agent_report') {
+        // A report wakes/informs the parent Agent. Speaking it here would let a
+        // child bypass the parent's user-visibility decision.
+        saLog(`subagent report received${event.senderSessionId ? ` from ${event.senderSessionId}` : ''}`)
+        continue
+      }
+      if (event.type === 'user_input_required') {
+        this.publish({ question: { callId: event.callId, text: event.text } })
+        saLog(`primary-agent question ${event.callId}: ${event.text.slice(0, 120)}`)
+        this.notifyAwareness(event)
+        continue
+      }
+      const significant = significantPlanChange(this.lastPlan, event)
+      this.lastPlan = event
+      if (!significant) continue
+      this.publish({ planNotice: event })
+      saLog(`primary-agent plan ${event.callId}: ${event.completed}/${event.total} completed`)
+      this.notifyAwareness(event)
     }
     const stepCount = countAssistantSteps(snapshot as SessionSnapshotLike)
     if (this.stepBaseline === undefined) this.stepBaseline = stepCount
@@ -258,6 +308,12 @@ export class VoiceController {
       this.publish({ agentReply: true })
       saLog('primary agent replied after submission')
     }
+  }
+
+  private notifyAwareness(event: Exclude<UserAwarenessEvent, { visibility: 'internal' }>): void {
+    if (this.state.status !== 'active' || !this.deps.notifyAwareness) return
+    if (event.voicePolicy === 'interrupt' && this.state.phase === 'speaking') void this.handle?.interrupt()
+    try { this.deps.notifyAwareness(event) } catch { /* notification is best-effort */ }
   }
 
   async consume(event: VoiceEvent): Promise<void> {
@@ -332,6 +388,10 @@ export class VoiceController {
       await this.organizeNotes(parsed, control)
       return
     }
+    if (name === 'get_assistant_settings' || name === 'update_assistant_settings') {
+      await this.configureAssistant(name, parsed, control)
+      return
+    }
     const draft = typeof parsed.draft === 'string' ? parsed.draft : undefined
     const validUpdate = name !== 'update_working_draft'
       || typeof parsed.summary === 'string' && (parsed.status === 'drafting' || parsed.status === 'ready')
@@ -393,6 +453,46 @@ export class VoiceController {
     // Next-turn context refresh is best-effort and must never block the tool
     // flow or the submission.
     try { await this.handle?.updateContext(await this.deps.context(draft)) } catch { /* knowledge/context unavailable */ }
+  }
+
+  private async configureAssistant(name: 'get_assistant_settings' | 'update_assistant_settings', parsed: Record<string, unknown>, control: ActionControl): Promise<void> {
+    const current = this.deps.getSettings?.()
+    if (!current) {
+      control.resolve({ ok: false, error: 'Session Assistant settings are unavailable.' })
+      return
+    }
+    if (name === 'get_assistant_settings') {
+      control.resolve({ ok: true, settings: current, application: SETTINGS_APPLICATION })
+      return
+    }
+    if (!this.deps.updateSettings) {
+      control.resolve({ ok: false, error: 'Session Assistant settings are read-only.' })
+      return
+    }
+    const patch: Partial<SessionAssistantSettings> = {}
+    for (const field of DECLARED_SETTINGS_FIELDS) {
+      if (Object.prototype.hasOwnProperty.call(parsed, field)) (patch as Record<string, unknown>)[field] = parsed[field]
+    }
+    const fields = Object.keys(patch) as (keyof SessionAssistantSettings)[]
+    if (fields.length === 0) {
+      control.resolve({ ok: false, error: 'No Session Assistant setting was provided.' })
+      return
+    }
+    const normalized = normalizeSettings({ ...current, ...patch })
+    const invalid = fields.find(field => normalized[field] !== patch[field])
+    if (invalid) {
+      control.resolve({ ok: false, error: `Invalid value for ${invalid}.` })
+      return
+    }
+    try {
+      const settings = await this.deps.updateSettings(patch)
+      const reconnectRequired = fields.some(field => field === 'recognitionProvider' || field === 'recognitionLang' || field === 'openaiRealtimeModel' || field === 'openaiRealtimeVoice' || field === 'doubaoRealtimeModel')
+      const standbyRestartRequired = fields.includes('wakeWord')
+      control.resolve({ ok: true, changed: fields, settings, reconnectRequired, standbyRestartRequired, application: SETTINGS_APPLICATION })
+      try { await this.handle?.updateContext((await this.deps.context()).slice(0, 12_000)) } catch { /* configuration still saved */ }
+    } catch (error: unknown) {
+      control.resolve({ ok: false, error: error instanceof Error ? error.message : String(error) })
+    }
   }
 
   /**
@@ -497,11 +597,16 @@ export function voiceConversationOptions(settings: SessionAssistantSettings, con
   }
 }
 
-/** Open a full-duplex preview session using the actual selected Realtime model/voice. */
+/** Open an interactive audition using the selected Realtime model and voice. */
 export function voiceAgentPreviewOptions(settings: SessionAssistantSettings, routeId = '') {
   const openai = settings.recognitionProvider === 'openai-realtime'
+  const previewText = settings.recognitionLang === 'zh-CN'
+    ? '请先简短地和我打个招呼，然后等我继续和你对话。'
+    : 'Greet me briefly, then wait for me to continue the conversation.'
   return {
     routeId: routeId || (openai ? settings.openaiRealtimeModel : settings.doubaoRealtimeModel),
     profileId: openai ? `session-assistant-preview-openai-${settings.openaiRealtimeVoice}` : 'session-assistant-preview',
+    outputOnly: false,
+    previewText,
   }
 }

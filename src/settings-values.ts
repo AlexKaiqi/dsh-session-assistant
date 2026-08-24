@@ -1,7 +1,6 @@
 export type RecognitionProvider = 'browser' | 'openai-realtime' | 'doubao-realtime'
 export type RecognitionLanguage = 'zh-CN' | 'en-US'
 export type ContextMode = 'off' | 'draft' | 'recent'
-export type AutoSpeakMode = 'final' | 'all'
 export type OpenAIRealtimeVoiceId = 'marin' | 'cedar' | 'alloy' | 'ash' | 'ballad' | 'coral' | 'echo' | 'sage' | 'shimmer' | 'verse'
 
 export interface SessionAssistantSettings {
@@ -11,10 +10,6 @@ export interface SessionAssistantSettings {
   openaiRealtimeVoice: OpenAIRealtimeVoiceId
   doubaoRealtimeModel: string
   openaiContextMode: ContextMode
-  autoSpeak: boolean
-  autoSpeakMode: AutoSpeakMode
-  voiceName: string
-  rate: number
   /** Wake word that reactivates the voice assistant from standby; empty disables standby wake-up. */
   wakeWord: string
 }
@@ -40,10 +35,6 @@ export const DEFAULT_SETTINGS: SessionAssistantSettings = {
   openaiRealtimeVoice: 'marin',
   doubaoRealtimeModel: '',
   openaiContextMode: 'recent',
-  autoSpeak: false,
-  autoSpeakMode: 'final',
-  voiceName: '',
-  rate: 1,
   wakeWord: '你好助手',
 }
 
@@ -56,8 +47,6 @@ export function normalizeSettings(input: unknown): SessionAssistantSettings {
   const provider = source.recognitionProvider
   const language = source.recognitionLang
   const contextMode = source.openaiContextMode
-  const speakMode = source.autoSpeakMode
-  const rate = Number(source.rate)
   const route = (field: string) => typeof source[field] === 'string' && /^[A-Za-z0-9._:/-]{0,180}$/.test(source[field]) ? source[field] : ''
   return {
     recognitionProvider: provider === 'browser' || provider === 'openai-realtime' || provider === 'doubao-realtime' ? provider : DEFAULT_SETTINGS.recognitionProvider,
@@ -66,10 +55,6 @@ export function normalizeSettings(input: unknown): SessionAssistantSettings {
     openaiRealtimeVoice: typeof source.openaiRealtimeVoice === 'string' && OPENAI_VOICE_IDS.has(source.openaiRealtimeVoice) ? source.openaiRealtimeVoice as OpenAIRealtimeVoiceId : DEFAULT_SETTINGS.openaiRealtimeVoice,
     doubaoRealtimeModel: route('doubaoRealtimeModel'),
     openaiContextMode: contextMode === 'off' || contextMode === 'draft' || contextMode === 'recent' ? contextMode : DEFAULT_SETTINGS.openaiContextMode,
-    autoSpeak: typeof source.autoSpeak === 'boolean' ? source.autoSpeak : DEFAULT_SETTINGS.autoSpeak,
-    autoSpeakMode: speakMode === 'all' || speakMode === 'final' ? speakMode : DEFAULT_SETTINGS.autoSpeakMode,
-    voiceName: typeof source.voiceName === 'string' ? source.voiceName : '',
-    rate: Number.isFinite(rate) ? Math.min(2, Math.max(0.5, rate)) : DEFAULT_SETTINGS.rate,
     wakeWord: typeof source.wakeWord === 'string' && source.wakeWord.length <= 24 ? source.wakeWord : DEFAULT_SETTINGS.wakeWord,
   }
 }

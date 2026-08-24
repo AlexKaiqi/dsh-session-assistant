@@ -6,9 +6,9 @@ const source = await readFile(new URL('../src/client/index.ts', import.meta.url)
 const controller = await readFile(new URL('../src/client/controller.ts', import.meta.url), 'utf8')
 const locales = await readFile(new URL('../src/client/locales.ts', import.meta.url), 'utf8')
 
-test('client registers exactly the four current-Session product Slots', () => {
+test('client registers exactly the three current-Session product Slots', () => {
   const names = [...source.matchAll(/ctx\.slots\.inject\('([^']+)'/g)].map(match => match[1])
-  assert.deepEqual(names, ['conversation.input.right', 'conversation.input.dock', 'conversation.chat.assistant-actions', 'settings.section'])
+  assert.deepEqual(names, ['conversation.input.right', 'conversation.input.dock', 'settings.section'])
   assert.match(source, /id: 'session-assistant-microphone'/)
   assert.match(source, /id: 'session-assistant-status'/)
   assert.match(source, /function MicControl/)
@@ -22,7 +22,7 @@ test('client registers exactly the four current-Session product Slots', () => {
 test('client UI uses one typed locale namespace for every product Slot', () => {
   assert.match(source, /ctx\.locale\.register\(NS, dictionaries as never\)/)
   assert.match(source, /const t = ctx\.locale\.bind\(NS\)/)
-  assert.equal([...source.matchAll(/locale: NS/g)].length, 4)
+  assert.equal([...source.matchAll(/locale: NS/g)].length, 3)
   assert.match(locales, /settingsTitle: '会话助手'/)
   assert.match(locales, /settingsTitle: 'Session Assistant'/)
   for (const locale of ["'zh-TW'", 'ja', 'ko', 'es', 'fr', 'de', "'pt-BR'", 'ru', 'ar', 'hi']) {
@@ -35,11 +35,10 @@ test('client UI uses one typed locale namespace for every product Slot', () => {
 })
 
 test('client consumes provider-neutral voiceAgent and authoritative Session input actions', () => {
-  for (const member of ['capabilities', 'models', 'startConversation', 'recognize', 'readAloud', 'registerActions']) assert.match(source, new RegExp(`${member}\\(`))
+  for (const member of ['capabilities', 'models', 'startConversation', 'recognize', 'registerActions']) assert.match(source, new RegExp(`${member}\\(`))
   for (const member of ['subscribe', 'updateContext', 'resolveAction', 'interrupt', 'end']) assert.match(controller, new RegExp(`${member}\\(`))
   assert.match(controller, /inputActions\.setDraft\(draft\)/)
   assert.match(controller, /inputActions\.submit\(\)/)
-  assert.match(source, /props\.messageId/)
   assert.match(source, /props\.useSession/)
   assert.match(source, /props\.useSessions/)
   assert.match(source, /props\.useWorkspaces/)
@@ -59,7 +58,9 @@ test('client consumes provider-neutral voiceAgent and authoritative Session inpu
   assert.match(source, /controller!\.start\(\(event\.text \|\| ''\)\.trim\(\)\.slice\(0, 20_000\), captured\)/)
   assert.match(source, /function VoiceAgentPreview/)
   assert.match(source, /voiceAgentPreviewOptions\(props\.settings, selected!\.id\)/)
-  assert.match(source, /handle\.current\?\.interrupt\(\)/)
+  assert.match(controller, /outputOnly: false/)
+  assert.match(controller, /previewText/)
+  assert.match(source, /if \(close && current\) void Promise\.resolve\(current\.end\(\)\)/)
   assert.match(source, /function VoiceWave/)
   assert.match(source, /sa-wave-speak/)
   assert.doesNotMatch(source, /startConversation: \(\) => \{[\s\S]{0,500}props\.use(Input|Session)/)
@@ -72,6 +73,13 @@ test('client consumes provider-neutral voiceAgent and authoritative Session inpu
   assert.match(controller, /organizeNotes\(parsed, control\)/)
   assert.match(source, /remote\.curate\(request\)/)
   assert.match(controller, /curate\(\{ sessionId: this\.deps\.sessionId/)
+  assert.match(source, /assistantSettingsContext\(settings\(\)\)/)
+  assert.match(controller, /configureAssistant\(name, parsed, control\)/)
+  assert.match(source, /settingsStore\.save/)
+  assert.doesNotMatch(source, /readAloud|ReadAloudAction|conversation\.chat\.assistant-actions|autoSpeak|voiceName|readRate/)
+  assert.doesNotMatch(source, /completionTimer/)
+  assert.match(source, /event\.type === 'error'\) \{ release\(true\)/)
+  assert.doesNotMatch(source, /event\.phase === 'listening' && spoke\.current\) \{ release\(true\)/)
 })
 
 test('session-assistant contains no provider transport or DOM implementation strings', async () => {
