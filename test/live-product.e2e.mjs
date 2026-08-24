@@ -22,7 +22,7 @@ const PROBE =
   process.env.DSH_SESSION_VOICE_E2E_PROBE || "会话助手端到端验证八二四六";
 const UTTERANCE =
   process.env.DSH_SESSION_VOICE_E2E_UTTERANCE ||
-  `请把当前草稿改成：${PROBE}。不要提交。`;
+  `你好助手，请把当前草稿改成：${PROBE}。不要提交。`;
 const TIMEOUT = Math.max(
   20_000,
   Number(process.env.DSH_VOICE_E2E_TIMEOUT_MS) || 90_000,
@@ -43,8 +43,7 @@ const state={draft:'',submitted:0,events:[],service:null,controller:null,context
 async function microphone(){if(!state.context){state.context=new AudioContext();state.destination=state.context.createMediaStreamDestination()}await state.context.resume();return new MediaStream(state.destination.stream.getAudioTracks().map(t=>t.clone()))}
 Object.defineProperty(navigator.mediaDevices,'getUserMedia',{configurable:true,value:microphone})
 window.__sessionE2E={
- async start(initialUserText=''){const ctx={reflect:{provide(){}}};state.service=new window.__voiceExports.VoiceAgentService(ctx,{root:window,basePath:'/dsh-realtime-voice'});const settings={recognitionProvider:'doubao-realtime',recognitionLang:'zh-CN',openaiRealtimeModel:'',openaiRealtimeVoice:'marin',doubaoRealtimeModel:'',openaiContextMode:'recent',autoSpeak:false,autoSpeakMode:'final',voiceName:'',rate:1,wakeWord:'你好助手'};const models=await state.service.models();const routeId=selectVoiceRoute(settings,models);if(routeId!=='${ROUTE_ID}')throw Error('auto-selected unexpected route: '+routeId);state.controller=new VoiceController({sessionId:'voice-e2e-session',inputActions:{setDraft(v){state.draft=v},submit(){state.submitted++}},getInput:()=>({draft:state.draft}),context:async()=>'',startConversation:async initial=>{const h=await state.service.startConversation({...voiceConversationOptions(settings,'Product live E2E; editable draft is empty.',routeId),ownerId:'session-assistant:voice-e2e-session',initialUserText:initial});h.subscribe(e=>state.events.push(JSON.parse(JSON.stringify(e))));return h},registerActions:tools=>{const r=state.service.registerActions('session-assistant:voice-e2e-session',tools);return()=>r.dispose()}});await state.controller.start(initialUserText)},
- async feed(b64){const bytes=Uint8Array.from(atob(b64),c=>c.charCodeAt(0));const b=await state.context.decodeAudioData(bytes.buffer);const s=state.context.createBufferSource();s.buffer=b;s.connect(state.destination);s.start();await new Promise(r=>s.onended=r)},
+ async start(initialUserText='',initialAudio){const ctx={reflect:{provide(){}}};state.service=new window.__voiceExports.VoiceAgentService(ctx,{root:window,basePath:'/dsh-realtime-voice'});const settings={recognitionProvider:'doubao-realtime',recognitionLang:'zh-CN',openaiRealtimeModel:'',openaiRealtimeVoice:'marin',doubaoRealtimeModel:'',openaiContextMode:'recent',autoSpeak:false,autoSpeakMode:'final',voiceName:'',rate:1,wakeWord:'你好助手'};const models=await state.service.models();const routeId=selectVoiceRoute(settings,models);if(routeId!=='${ROUTE_ID}')throw Error('auto-selected unexpected route: '+routeId);state.controller=new VoiceController({sessionId:'voice-e2e-session',inputActions:{setDraft(v){state.draft=v},submit(){state.submitted++}},getInput:()=>({draft:state.draft}),context:async()=>'',startConversation:async(initial,audio)=>{const h=await state.service.startConversation({...voiceConversationOptions(settings,'Product live E2E; editable draft is empty.',routeId),ownerId:'session-assistant:voice-e2e-session',initialUserText:initial,initialAudio:audio});h.subscribe(e=>state.events.push(JSON.parse(JSON.stringify(e))));return h},registerActions:tools=>{const r=state.service.registerActions('session-assistant:voice-e2e-session',tools);return()=>r.dispose()}});await state.controller.start(initialUserText,initialAudio)},
  snapshot(){return{draft:state.draft,submitted:state.submitted,events:state.events,controller:state.controller&&state.controller.getSnapshot(),audioInput:state.service&&state.service.capabilities().audioInput}},
  async stop(){if(state.controller)await state.controller.dispose();const audioInput=state.service&&state.service.capabilities().audioInput;if(state.service)state.service.dispose();if(state.context&&state.context.state!=='closed')await state.context.close();return{audioInput}}
 };window.__sessionE2EReady=true
@@ -81,6 +80,28 @@ async function generateAudio(directory) {
     "1",
   ]);
   return readFile(wav);
+}
+
+function capturedPCM(wav) {
+  assert.equal(wav.toString("ascii", 0, 4), "RIFF");
+  assert.equal(wav.toString("ascii", 8, 12), "WAVE");
+  let offset = 12;
+  let sampleRate;
+  let data;
+  while (offset + 8 <= wav.length) {
+    const type = wav.toString("ascii", offset, offset + 4);
+    const size = wav.readUInt32LE(offset + 4);
+    if (type === "fmt ") {
+      assert.equal(wav.readUInt16LE(offset + 8), 1, "wake fixture must be PCM");
+      assert.equal(wav.readUInt16LE(offset + 10), 1, "wake fixture must be mono");
+      assert.equal(wav.readUInt16LE(offset + 22), 16, "wake fixture must be PCM16");
+      sampleRate = wav.readUInt32LE(offset + 12);
+    }
+    if (type === "data") data = wav.subarray(offset + 8, offset + 8 + size);
+    offset += 8 + size + (size % 2);
+  }
+  assert.ok(sampleRate && data?.length, "generated Session wake WAV must have fmt and data chunks");
+  return { pcm16Base64: data.toString("base64"), sampleRate };
 }
 
 async function waitFor(check, message) {
@@ -218,7 +239,7 @@ async function harness(stats) {
 }
 
 test(
-  "real speech reaches the Session Assistant product action through the unified voice runtime",
+  "one complete wake utterance reaches the Session Assistant action through the unified voice runtime",
   {
     skip: LIVE
       ? false
@@ -233,6 +254,7 @@ test(
     assert.equal(route?.available, true, `route ${ROUTE_ID} is unavailable`);
     const temporary = await mkdtemp(join(tmpdir(), "dsh-session-voice-e2e-"));
     const wav = await generateAudio(temporary);
+    const captured = capturedPCM(wav);
     const stats = {
       providerSockets: 0,
       outputFrames: 0,
@@ -245,7 +267,8 @@ test(
     try {
       await page.goto(server.url);
       await page.waitForFunction(() => window.__sessionE2EReady);
-      await page.evaluate(() => window.__sessionE2E.start());
+      assert.equal(stats.providerSockets, 0, "standby must not open a Provider connection before the wake match");
+      await page.evaluate(({ utterance, captured }) => window.__sessionE2E.start(utterance, captured), { utterance: UTTERANCE, captured });
       await page.waitForFunction(
         () =>
           window.__sessionE2E
@@ -253,10 +276,6 @@ test(
             .events.some((e) => e.type === "status" && e.connected),
         null,
         { timeout: TIMEOUT },
-      );
-      await page.evaluate(
-        (b64) => window.__sessionE2E.feed(b64),
-        wav.toString("base64"),
       );
       await page.waitForFunction(
         () => window.__sessionE2E.snapshot().draft.length > 0,
@@ -280,6 +299,7 @@ test(
         "a draft-only utterance must not submit",
       );
       assert.match(before.draft, /会话助手端到端验证|八二四六|8246/);
+      assert.equal(before.events.some((event) => event.type === "transcript" && event.role === "input" && event.final && /你好助手/.test(event.text)), true);
       assert.equal(stats.providerSockets, 1);
       assert.ok(
         stats.outputFrames > 0 && stats.outputBytes > 1000,
