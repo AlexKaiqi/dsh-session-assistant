@@ -108,7 +108,10 @@ export interface ControllerDependencies {
     readonly inputActions: InputActionsLike;
     readonly getInput: () => InputStateLike;
     readonly context: (draft?: string) => string | Promise<string>;
-    readonly startConversation: (initialUserText?: string) => Promise<VoiceConversation> | VoiceConversation;
+    readonly startConversation: (initialUserText?: string, initialAudio?: {
+        readonly pcm16Base64: string;
+        readonly sampleRate: number;
+    }) => Promise<VoiceConversation> | VoiceConversation;
     readonly dictation?: boolean | (() => boolean);
     /** Called by the UI whenever the current-session snapshot changes (detects primary-Agent questions and replies). */
     readonly observeSession?: (snapshot: unknown) => void;
@@ -157,7 +160,10 @@ export declare class VoiceController {
     get sessionId(): string;
     getSnapshot(): ControllerState;
     subscribe(listener: () => void): () => void;
-    start(initialUserText?: string): Promise<void>;
+    start(initialUserText?: string, initialAudio?: {
+        readonly pcm16Base64: string;
+        readonly sampleRate: number;
+    }): Promise<void>;
     stop(): Promise<void>;
     dispose(): Promise<void>;
     interrupt(): Promise<void>;
