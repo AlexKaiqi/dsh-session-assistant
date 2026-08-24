@@ -1,6 +1,6 @@
 {
   "name": "dsh-session-assistant",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Session-scoped full-duplex voice assistant with tool-controlled drafting and Agent submission for DeepSeek Harness.",
   "type": "module",
   "main": "./lib/index.js",
@@ -81,6 +81,9 @@
         "@deepseek-ai/dsh-client-ui-conversation",
         "@deepseek-ai/dsh-client-ui-settings",
         "@deepseek-ai/dsh-client-ui-slots"
+      ],
+      "optionalDependencies": [
+        "dsh-personal-knowledge-base"
       ]
     },
     "bundle": {
@@ -120,32 +123,38 @@
   "types": "./lib/types/index.d.ts",
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
-    "@deepseek-ai/dsh-settings": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-typert-protocol": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-api-remotes": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-client-locale": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-client-runtime": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-client-ui-conversation": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-client-ui-settings": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-client-ui-slots": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-settings": "^0.1.1-rc.2",
+    "@deepseek-ai/dsh-typert-protocol": "^0.1.1-rc.2",
+    "@deepseek-ai/dsh-api-remotes": "^0.1.1-rc.2",
+    "@deepseek-ai/dsh-client-locale": "^0.1.1-rc.2",
+    "@deepseek-ai/dsh-client-runtime": "^0.1.1-rc.2",
+    "@deepseek-ai/dsh-client-ui-conversation": "^0.1.1-rc.2",
+    "@deepseek-ai/dsh-client-ui-settings": "^0.1.1-rc.2",
+    "@deepseek-ai/dsh-client-ui-slots": "^0.1.1-rc.2",
     "@deepseek-ai/schemastery": "^3.18.1",
-    "dsh-multi-model-provider": "^0.1.0-rc.9",
-    "dsh-realtime-voice": "^0.3.0",
+    "dsh-multi-model-provider": "^0.1.0-rc.11",
+    "dsh-personal-knowledge-base": "^0.3.2",
+    "dsh-realtime-voice": "^0.3.1",
     "react": "^18.2.0"
+  },
+  "peerDependenciesMeta": {
+    "dsh-personal-knowledge-base": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
-    "@deepseek-ai/dsh-settings": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-typert-protocol": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-api-remotes": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-client-locale": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-client-runtime": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-client-ui-conversation": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-client-ui-settings": "^0.1.0-rc.6",
-    "@deepseek-ai/dsh-client-ui-slots": "^0.1.0-rc.6",
+    "@deepseek-ai/dsh-settings": "^0.1.1-rc.2",
+    "@deepseek-ai/dsh-typert-protocol": "^0.1.1-rc.2",
+    "@deepseek-ai/dsh-api-remotes": "^0.1.1-rc.2",
+    "@deepseek-ai/dsh-client-locale": "^0.1.1-rc.2",
+    "@deepseek-ai/dsh-client-runtime": "^0.1.1-rc.2",
+    "@deepseek-ai/dsh-client-ui-conversation": "^0.1.1-rc.2",
+    "@deepseek-ai/dsh-client-ui-settings": "^0.1.1-rc.2",
+    "@deepseek-ai/dsh-client-ui-slots": "^0.1.1-rc.2",
     "@deepseek-ai/schemastery": "^3.18.1",
     "dsh-multi-model-provider": "file:../dsh-multi-model-provider",
-    "dsh-temporary-session": "link:../dsh-temporary-session/packages/plugin",
+    "dsh-personal-knowledge-base": "link:../dsh-personal-knowledge-base",
     "dsh-realtime-voice": "file:../dsh-realtime-voice",
     "react": "^18.2.0",
     "@types/node": "^24.13.3",

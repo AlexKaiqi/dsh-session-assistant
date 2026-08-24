@@ -6,11 +6,19 @@
 
 ## 架构
 
+本版本面向 DeepSeek Harness `0.1.1-rc.2`。`dsh-multi-model-provider@^0.1.0-rc.11` 与 `dsh-realtime-voice@^0.3.1` 是必需插件；`dsh-personal-knowledge-base@^0.3.2` 是可选知识集成。它们都应直接安装到同一 profile，DSH 不会根据 peer 声明自动安装、激活或更新。
+
+```sh
+dsh plugin --profile web add dsh-multi-model-provider dsh-realtime-voice dsh-session-assistant
+# 可选：dsh plugin --profile web add dsh-personal-knowledge-base
+dsh plugin --profile web update dsh-multi-model-provider dsh-realtime-voice dsh-session-assistant dsh-personal-knowledge-base
+```
+
 - Host 通过 DSH Settings 注册 `session-assistant` 命名空间，以组合 `Config` 为 base，并声明 `applies: live`。
 - 仅当命名空间没有用户覆盖时，首次启动可从 `~/.dsh/session-assistant.json`、`talk-to-text.json` 或 `chatvoice.json` 导入一次；之后不再写这些旧文件。
 - 插件自有的严格 Typert Remote 只公开带 revision 防冲突的 `describe` 与 `save`。
 - Client UI 精确注册到 `conversation.input.right`、`conversation.input.dock`、`conversation.chat.assistant-actions` 和 `settings.section`；麦克风与状态只属于当前 Session。
-- Client 文案集中注册到宿主 locale namespace，中文显示“会话助手”，并随全局语言设置在中英文间实时切换。
+- Client 文案集中注册到宿主 locale namespace，支持 `en`、`zh`、`zh-TW`、`ja`、`ko`、`es`、`fr`、`de`、`pt-BR`、`ru`、`ar`、`hi`，并随全局语言设置实时切换。
 - `dsh-realtime-voice` 对外提供“与 Agent 开始全双工语音对话”的能力；Provider 协议、媒体传输、打断和音频输入仲裁都隐藏在该边界之后。
 - 每个会话以 `session-assistant:<sessionId>` 开始一场 `VoiceConversation`，并用同一 owner 前缀向 `voiceAgent.registerActions` 注册产品动作。动作的授权门仍由本插件持有；若全局 Pet Assistant 或其他语音产品正在占用麦克风，会明确返回冲突。
 - Realtime route 留空表示自动选择：正式会话与试听都会选取所选 Provider 协议下首个可用 route，不会把空 route 传给统一语音底座。

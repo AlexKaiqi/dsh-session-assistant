@@ -4,11 +4,19 @@ A Session-scoped product layer for discussing a request by voice, maintaining th
 
 ## Architecture
 
+This release targets DeepSeek Harness `0.1.1-rc.2`. `dsh-multi-model-provider@^0.1.0-rc.11` and `dsh-realtime-voice@^0.3.1` are required; `dsh-personal-knowledge-base@^0.3.2` is optional. Install every bundle directly in the same profile because DSH does not auto-install, activate, or update peer plugins.
+
+```sh
+dsh plugin --profile web add dsh-multi-model-provider dsh-realtime-voice dsh-session-assistant
+# Optional: dsh plugin --profile web add dsh-personal-knowledge-base
+dsh plugin --profile web update dsh-multi-model-provider dsh-realtime-voice dsh-session-assistant dsh-personal-knowledge-base
+```
+
 - Host registers the DSH Settings namespace `session-assistant` with live application and the composition `Config` as its base layer.
 - The first run may import `~/.dsh/session-assistant.json`, `talk-to-text.json`, or `chatvoice.json` only when no user overrides exist. Legacy files are never written.
 - A strict plugin-owned Typert Remote exposes revision-fenced settings plus an optional, bounded Personal Knowledge context projection.
 - Client UI is registered in `conversation.input.right`, `conversation.input.dock`, `conversation.chat.assistant-actions`, and `settings.section`; its microphone and status remain scoped to the current Session.
-- Client copy is registered in one Host locale namespace and switches live with the global Chinese/English preference; the Chinese section title is “会话助手”.
+- Client copy is registered in one Host locale namespace for `en`, `zh`, `zh-TW`, `ja`, `ko`, `es`, `fr`, `de`, `pt-BR`, `ru`, `ar`, and `hi`, and switches live with the global locale.
 - `dsh-realtime-voice` exposes one product capability: start a full-duplex voice conversation with an Agent. Provider protocols, browser media, interruption, and audio-input arbitration stay behind that boundary.
 - Each Session starts a `VoiceConversation` as `session-assistant:<sessionId>` and registers product actions with `voiceAgent.registerActions` under the same owner prefix. This plugin still owns every authorization gate; if the global Pet Assistant or another voice product owns the microphone, startup fails explicitly instead of capturing in parallel.
 - An empty Realtime route means automatic selection: both normal conversations and previews choose the first available route for the selected Provider protocol instead of passing an empty route to the unified voice runtime.

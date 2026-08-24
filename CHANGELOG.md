@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- **依赖与兼容基线**：升级到 DeepSeek Harness `0.1.1-rc.2`；multi-model `rc.11` 与 realtime-voice `0.3.1` 为必需 peer，Personal Knowledge `0.3.2` 改为显式可选 peer，并同步 Inventory 元数据与安装/更新说明
 - **讨论增量整理**：`organize_notes` 只把**上次成功整理之后的新讨论**交给整理 agent（成功才推进基线，失败自动全量重试）——长会话多次整理不再重复归纳同一段讨论，省 token 且提案更聚焦
 - **整理闭环完善**：语音会话的**讨论转写本身参与整理**（finalized transcript 累积，`organize_notes` 与草稿一起交给整理 agent——不再只整理草稿而丢失讨论）；整理完成后**结果回注语音会话上下文**（`[Curator notice]` 摘要，模型下次开口自然带出"N 条提案待确认"），语音会话结束后结果也不会丢
 - **语音能力抽象升级**：继续依赖 `dsh-realtime-voice`，但产品 API 收敛为 `voiceAgent.startConversation` 与 `VoiceConversation`，Provider 协议留在运行时内部。模型动作由 `voiceAgent.registerActions` 执行和回传（支持异步双输出），并发出标准化 `action-result`。Session Assistant 仍以 `session-assistant:<sessionId>` 注册四个产品动作，并继续独占草稿、提交授权与并发守卫
