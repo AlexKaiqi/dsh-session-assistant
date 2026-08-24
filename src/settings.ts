@@ -1,6 +1,6 @@
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
-import { settingsNamespace, type SettingsScope } from '@deepseek-ai/dsh-settings'
+import { settingsNamespace, type SettingsNamespace, type SettingsScope } from '@deepseek-ai/dsh-settings'
 import {
   DEFAULT_SETTINGS,
   OPENAI_REALTIME_VOICES,
@@ -10,7 +10,7 @@ import {
 
 export * from './settings-values.ts'
 
-export const SETTINGS_NAMESPACE = settingsNamespace('session-assistant')
+export const SETTINGS_NAMESPACE: SettingsNamespace = settingsNamespace('session-assistant')
 
 export const Config: z<SessionAssistantSettings> = z.object({
   recognitionProvider: z.union(['browser', 'openai-realtime', 'doubao-realtime'] as const).description('语音后端').default(DEFAULT_SETTINGS.recognitionProvider),

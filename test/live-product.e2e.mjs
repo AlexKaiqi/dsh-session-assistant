@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { createServer, request as httpRequest } from "node:http";
+import { createRequire } from "node:module";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -28,9 +29,8 @@ const TIMEOUT = Math.max(
   Number(process.env.DSH_VOICE_E2E_TIMEOUT_MS) || 90_000,
 );
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
-const VOICE_CLIENT = fileURLToPath(
-  new URL("../../dsh-realtime-voice/client/client.js", import.meta.url),
-);
+const require = createRequire(import.meta.url);
+const VOICE_CLIENT = require.resolve("dsh-realtime-voice/client");
 const WS_PROTOCOL = "dsh-realtime-voice-v1";
 
 function pageSource() {

@@ -1,6 +1,18 @@
 packages:
   - .
 
+autoInstallPeers: false
+
+# These are transitive Host services supplied by DeepSeek Harness at runtime.
+# Keeping them out of this standalone plugin avoids installing the whole Host.
+peerDependencyRules:
+  ignoreMissing:
+    - '@deepseek-ai/dsh-*'
+
 allowBuilds:
   '@google/genai': false
   protobufjs: false
+
+minimumReleaseAgeExclude:
+  - dsh-multi-model-provider@0.1.0-rc.11
+  - dsh-realtime-voice@0.3.1

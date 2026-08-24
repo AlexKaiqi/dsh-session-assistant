@@ -12,7 +12,7 @@ export function validateSuite(suite) {
   if (suite?.schemaVersion !== 1) errors.push('schemaVersion must be 1')
   if (!text(suite?.id) || !text(suite?.version) || !text(suite?.objective)) errors.push('id, version, and objective are required')
   const stages = new Set(suite?.releaseOrder ?? [])
-  if (stages.size < 5) errors.push('releaseOrder must define all product gates')
+  if (stages.size === 0) errors.push('releaseOrder must define product gates')
 
   const dimensions = new Set()
   for (const dimension of suite?.dimensions ?? []) {
@@ -25,7 +25,7 @@ export function validateSuite(suite) {
   const ids = new Set()
   for (const testCase of suite?.cases ?? []) {
     const id = testCase?.id ?? '?'
-    if (!/^(PET|AST|INT|VOI|E2E|SEC|OPS)-\d{3}$/.test(id)) errors.push(`invalid case id '${id}'`)
+    if (!/^(AST|VOI|SEC|OPS)-\d{3}$/.test(id)) errors.push(`invalid case id '${id}'`)
     else if (ids.has(id)) errors.push(`duplicate case '${id}'`)
     else ids.add(id)
     if (!stages.has(testCase?.stage)) errors.push(`case '${id}' references unknown stage '${testCase?.stage ?? '?'}'`)
@@ -50,6 +50,8 @@ export function validateRun(run, suite, caseIds) {
   const errors = []
   const prefix = run?.executedAt || 'run'
   if (run?.suiteId !== suite.id || run?.suiteVersion !== suite.version) errors.push(`${prefix}: suite id/version mismatch`)
+  if (!text(run?.executedAt)) errors.push(`${prefix}: executedAt is required`)
+  if (!run?.environment || typeof run.environment !== 'object' || Array.isArray(run.environment)) errors.push(`${prefix}: environment is required`)
   const seen = new Set()
   for (const result of run?.results ?? []) {
     const id = result?.caseId ?? '?'
@@ -69,20 +71,44 @@ export function validateRun(run, suite, caseIds) {
   return errors
 }
 
+export function validateReleaseGate(run, suite) {
+  const resultById = new Map((run?.results ?? []).map(result => [result.caseId, result]))
+  const releaseCases = suite.cases.filter(testCase => testCase.tier === 'release')
+  const errors = releaseCases
+    .filter(testCase => resultById.get(testCase.id)?.status !== 'passed')
+    .map(testCase => `latest run release gate '${testCase.id}' is '${resultById.get(testCase.id)?.status ?? 'missing'}'`)
+  return {
+    errors,
+    passed: releaseCases.filter(testCase => resultById.get(testCase.id)?.status === 'passed').length,
+    total: releaseCases.length,
+  }
+}
+
 async function main() {
   const suite = JSON.parse(await readFile(resolve(directory, 'suite.json'), 'utf8'))
   const validated = validateSuite(suite)
   const errors = [...validated.errors]
   const runDirectory = resolve(directory, 'runs')
-  for (const name of (await readdir(runDirectory)).filter(name => name.endsWith('.json')).sort()) {
+  const names = (await readdir(runDirectory)).filter(name => name.endsWith('.json')).sort()
+  const runs = []
+  for (const name of names) {
     const run = JSON.parse(await readFile(resolve(runDirectory, name), 'utf8'))
+    runs.push(run)
     errors.push(...validateRun(run, suite, validated.ids))
   }
+  if (runs.length === 0) errors.push('at least one current evaluation run is required')
+  const release = runs.length > 0 ? validateReleaseGate(runs.at(-1), suite) : { errors: [], passed: 0, total: 0 }
+  errors.push(...release.errors)
+
   if (errors.length > 0) {
     for (const error of errors) console.error(`- ${error}`)
     process.exitCode = 1
   } else {
-    console.log(`validated ${suite.cases.length} cases, ${suite.dimensions.length} dimensions, and all recorded runs`)
+    const benchmarks = suite.cases.filter(testCase => testCase.tier === 'benchmark')
+    const latest = runs.at(-1)
+    const resultById = new Map(latest.results.map(result => [result.caseId, result]))
+    const benchmarkPassed = benchmarks.filter(testCase => resultById.get(testCase.id)?.status === 'passed').length
+    console.log(`validated ${suite.cases.length} cases and ${runs.length} current run(s); latest release gate ${release.passed}/${release.total} passed; benchmarks ${benchmarkPassed}/${benchmarks.length} passed`)
   }
 }
 

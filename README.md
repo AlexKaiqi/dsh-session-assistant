@@ -1,18 +1,35 @@
 # dsh-session-assistant
 
+[English](README.en.md) | 简体中文
+
+[![npm version](https://img.shields.io/npm/v/dsh-session-assistant.svg)](https://www.npmjs.com/package/dsh-session-assistant)
+[![CI](https://github.com/AlexKaiqi/dsh-session-assistant/actions/workflows/ci.yml/badge.svg)](https://github.com/AlexKaiqi/dsh-session-assistant/actions/workflows/ci.yml)
+[![DeepSeek Harness plugin](https://img.shields.io/badge/DeepSeek%20Harness-dsh--plugin-0b7285.svg)](https://github.com/topics/dsh-plugin)
+[![MIT license](https://img.shields.io/npm/l/dsh-session-assistant.svg)](./LICENSE)
+
 面向当前 Session 的语音讨论与草稿产品层：与用户讨论请求、维护主输入区草稿，并在用户明确授权后提交给主 Agent。
 
 > 设计哲学（为什么存在、价值、第一性原理、能力全景与边界）：见 [docs/design.md](docs/design.md)。
 
-## 架构
+## 安装
 
 本版本面向 DeepSeek Harness `0.1.1-rc.2`。`dsh-multi-model-provider@^0.1.0-rc.11` 与 `dsh-realtime-voice@^0.3.1` 是必需插件；`dsh-personal-knowledge-base@^0.3.2` 是可选知识集成。它们都应直接安装到同一 profile，DSH 不会根据 peer 声明自动安装、激活或更新。
 
 ```sh
 dsh plugin --profile web add dsh-multi-model-provider dsh-realtime-voice dsh-session-assistant
-# 可选：dsh plugin --profile web add dsh-personal-knowledge-base
-dsh plugin --profile web update dsh-multi-model-provider dsh-realtime-voice dsh-session-assistant dsh-personal-knowledge-base
+dsh plugin --profile web update dsh-multi-model-provider dsh-realtime-voice dsh-session-assistant
 ```
+
+若同一 profile 已安装 `dsh-personal-knowledge-base`，知识投影与 `organize_notes` 会自动启用；未安装时静默降级。该可选包尚未发布到 npm，因此不要把它加入普通 registry 安装命令。
+
+## 使用前配置
+
+- 先在 DSH 模型设置中配置可用的 OpenAI Realtime 或豆包 Realtime Duplex 路由；route 留空时会自动选择当前协议下第一个可用路由。
+- 浏览器识别依赖浏览器的 `SpeechRecognition` 能力，Chrome/Edge 兼容性最好；Realtime 模式需要麦克风权限。
+- Realtime 会话和音色试听可能产生 Provider 费用。普通检查与单元测试不会发起真实计费请求。
+- 长期 Provider 凭据只保留在 Host；浏览器只接收经过校验的 route/profile 和短期会话数据。
+
+## 架构与边界
 
 - Host 通过 DSH Settings 注册 `session-assistant` 命名空间，以组合 `Config` 为 base，并声明 `applies: live`。
 - 仅当命名空间没有用户覆盖时，首次启动可从 `~/.dsh/session-assistant.json`、`talk-to-text.json` 或 `chatvoice.json` 导入一次；之后不再写这些旧文件。
@@ -34,7 +51,10 @@ OpenAI／豆包路由、Profile、音色、浏览器识别、上下文与朗读�
 ## 验证
 
 ```bash
-npm run check
+pnpm install --frozen-lockfile
+pnpm check
 ```
 
-真实 Provider 产品链需显式授权计费调用后运行 `npm run test:e2e:live`。该用例把生成语音送入浏览器虚拟麦克风，经统一 `voiceAgent` 和真实 Realtime Provider，最终断言 Session Assistant 的真实草稿执行器修改草稿且未越权提交。
+`pnpm check` 包含 peer 依赖检查、类型检查、评测发布门、构建、33 项行为测试和 npm 包内容审计。真实 Provider 产品链需显式授权计费调用后运行 `pnpm test:e2e:live`；该用例把生成语音送入浏览器虚拟麦克风，经统一 `voiceAgent` 和真实 Realtime Provider，最终断言真实草稿执行器修改草稿且未越权提交。
+
+常见问题：音色试听不可用通常表示没有可调用的 Realtime route；麦克风失败会以稳定错误码本地化显示；其他语音产品占用麦克风时会明确返回 `audio_input_busy`，不会并行采集。

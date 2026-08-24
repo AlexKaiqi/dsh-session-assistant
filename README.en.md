@@ -1,16 +1,33 @@
 # dsh-session-assistant
 
+[English](README.en.md) | [简体中文](README.md)
+
+[![npm version](https://img.shields.io/npm/v/dsh-session-assistant.svg)](https://www.npmjs.com/package/dsh-session-assistant)
+[![CI](https://github.com/AlexKaiqi/dsh-session-assistant/actions/workflows/ci.yml/badge.svg)](https://github.com/AlexKaiqi/dsh-session-assistant/actions/workflows/ci.yml)
+[![DeepSeek Harness plugin](https://img.shields.io/badge/DeepSeek%20Harness-dsh--plugin-0b7285.svg)](https://github.com/topics/dsh-plugin)
+[![MIT license](https://img.shields.io/npm/l/dsh-session-assistant.svg)](./LICENSE)
+
 A Session-scoped product layer for discussing a request by voice, maintaining the current composer draft, and explicitly submitting the final text to the primary Agent.
 
-## Architecture
+## Install
 
 This release targets DeepSeek Harness `0.1.1-rc.2`. `dsh-multi-model-provider@^0.1.0-rc.11` and `dsh-realtime-voice@^0.3.1` are required; `dsh-personal-knowledge-base@^0.3.2` is optional. Install every bundle directly in the same profile because DSH does not auto-install, activate, or update peer plugins.
 
 ```sh
 dsh plugin --profile web add dsh-multi-model-provider dsh-realtime-voice dsh-session-assistant
-# Optional: dsh plugin --profile web add dsh-personal-knowledge-base
-dsh plugin --profile web update dsh-multi-model-provider dsh-realtime-voice dsh-session-assistant dsh-personal-knowledge-base
+dsh plugin --profile web update dsh-multi-model-provider dsh-realtime-voice dsh-session-assistant
 ```
+
+If `dsh-personal-knowledge-base` is already installed in the same profile, bounded knowledge projection and `organize_notes` activate automatically; absence degrades silently. The optional package is not published to npm yet, so do not put it in a normal registry install command.
+
+## Before use
+
+- Configure an available OpenAI Realtime or Doubao Realtime Duplex route in DSH Models. An empty route auto-selects the first callable route for the chosen protocol.
+- Browser recognition depends on the browser `SpeechRecognition` implementation; Chrome and Edge have the best support. Realtime modes require microphone permission.
+- Realtime conversations and voice previews may incur Provider charges. Normal checks and unit tests never make billable live calls.
+- Long-lived Provider credentials remain on the Host; the browser receives only validated route/profile references and short-lived session data.
+
+## Architecture and boundaries
 
 - Host registers the DSH Settings namespace `session-assistant` with live application and the composition `Config` as its base layer.
 - The first run may import `~/.dsh/session-assistant.json`, `talk-to-text.json`, or `chatvoice.json` only when no user overrides exist. Legacy files are never written.
@@ -26,12 +43,15 @@ dsh plugin --profile web update dsh-multi-model-provider dsh-realtime-voice dsh-
 
 The voice model can only call `update_working_draft`, `submit_to_agent`, `end_voice_session`, or `organize_notes`; this plugin registers their executors with the runtime while keeping the product boundaries: draft changes use `inputActions.setDraft(fullText)`, submission uses `inputActions.submit()`, and curation is delegated to the curator agent. Each controller remains bound to the Slot `sessionId`; disposed or closed controllers reject late tool application.
 
-OpenAI and Doubao route/profile/voice choices remain settings, but this plugin consumes only normalized voice events. Settings expose two distinct previews: the assistant-voice preview opens a receive-only Realtime session for the current model/voice without microphone access (and may consume a small amount of Provider quota), while the reply read-aloud preview enumerates browser voices and uses the current unsaved language, voice, and speed. Read-aloud resolves finalized message text from Session state by `messageId`, never from rendered DOM.
+OpenAI and Doubao route/profile/voice choices remain settings, but this plugin consumes only normalized voice events. The assistant-voice preview opens a full-duplex Realtime conversation with the current model and voice, without product actions, and may consume Provider quota. Manual read-aloud resolves finalized message text from Session state by `messageId`, never from rendered DOM.
 
 ## Verification
 
 ```bash
-npm run check
+pnpm install --frozen-lockfile
+pnpm check
 ```
 
-Run `npm run test:e2e:live` only after explicitly authorizing a billable Provider call. It sends generated speech through a browser virtual microphone, the unified `voiceAgent`, and the real Realtime Provider, then asserts that the actual Session Assistant draft executor updates the draft without submitting it.
+`pnpm check` runs peer-dependency checking, type checking, the evaluation release gate, the build, 33 behavioral tests, and npm package-content verification. Run `pnpm test:e2e:live` only after explicitly authorizing a billable Provider call. It sends generated speech through a browser virtual microphone, the unified `voiceAgent`, and the real Realtime Provider, then asserts that the actual draft executor updates the draft without submitting it.
+
+Troubleshooting: a disabled voice preview usually means that no callable Realtime route is configured; microphone failures are displayed through stable localized error codes; if another voice product owns audio input, startup reports `audio_input_busy` instead of capturing concurrently.

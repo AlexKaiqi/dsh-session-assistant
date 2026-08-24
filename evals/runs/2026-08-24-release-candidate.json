@@ -1,0 +1,74 @@
+{
+  "suiteId": "dsh-session-assistant-product",
+  "suiteVersion": "2.0.0",
+  "executedAt": "2026-08-24T12:39:59+08:00",
+  "environment": {
+    "kind": "local-tests-isolated-profile-and-gui",
+    "platform": "macOS arm64",
+    "node": "22.19.0 compatible",
+    "dshProfile": "temporary clean web profile",
+    "note": "未调用真实计费 Provider；L4 和 30 分钟 soak 保持未运行。"
+  },
+  "results": [
+    {
+      "caseId": "AST-001",
+      "status": "passed",
+      "observedLevel": "L3",
+      "evidence": "在隔离 DSH web profile 启动真实 UI：Session Assistant 设置完整渲染；宿主语言由中文切到英文后文案实时更新；浏览器控制台无插件 warning/error。"
+    },
+    {
+      "caseId": "AST-002",
+      "status": "passed",
+      "observedLevel": "L2",
+      "evidence": "client-controller 集成测试覆盖讨论事件、完整草稿更新、ready 状态、空草稿拒绝、有效草稿只提交一次，以及先 resolve 工具结果再 submit。"
+    },
+    {
+      "caseId": "AST-003",
+      "status": "passed",
+      "observedLevel": "L2",
+      "evidence": "controller 与 client contract 测试覆盖 revision 冲突、disposed controller 的迟到调用、按 sessionId 注册动作和释放；统一语音底座返回稳定 audio_input_busy。"
+    },
+    {
+      "caseId": "VOI-001",
+      "status": "passed",
+      "observedLevel": "L2",
+      "evidence": "本地 OpenAI HTTP/豆包 WebSocket transport 测试及 Host/Client contract 验证统一 route、Profile、context、工具往返、取消和清理；runtimeModels 不持久化。"
+    },
+    {
+      "caseId": "VOI-002",
+      "status": "not-run",
+      "observedLevel": "none",
+      "evidence": "未获得本轮真实计费 Provider 调用授权，因此未执行真实麦克风、扬声器、打断和断线恢复基准。"
+    },
+    {
+      "caseId": "VOI-003",
+      "status": "passed",
+      "observedLevel": "L2",
+      "evidence": "wake/listener 与 client 测试覆盖唤醒词判定、有界 PCM、命中后整句首音频交接、未命中丢弃、Session 绑定和 disposer 清理。"
+    },
+    {
+      "caseId": "AST-004",
+      "status": "passed",
+      "observedLevel": "L2",
+      "evidence": "Host Remote 与 controller 测试覆盖可选 project、organize_notes 异步返回、讨论增量、草稿合并、成功/失败/冷却/缺失服务，以及失败不推进增量基线。"
+    },
+    {
+      "caseId": "SEC-001",
+      "status": "passed",
+      "observedLevel": "L2",
+      "evidence": "tool-surface、prompt、Remote 与 client contract 验证模型仅有 update_working_draft、submit_to_agent、end_voice_session、organize_notes；客户端不直接使用 Provider/media/DOM API。"
+    },
+    {
+      "caseId": "OPS-001",
+      "status": "passed",
+      "observedLevel": "L3",
+      "evidence": "从官方 npm registry 独立安装依赖并完成类型、构建、测试和包内容审计；tarball 在全新 DSH_HOME 与两个必需插件组合，配置 dump 和 Web 启动冒烟通过。"
+    },
+    {
+      "caseId": "OPS-002",
+      "status": "not-run",
+      "observedLevel": "none",
+      "evidence": "本轮未执行 30 分钟资源趋势、完整键盘/reduced-motion、RTL 和无音频设备基准；它不计入 release 门。"
+    }
+  ]
+}

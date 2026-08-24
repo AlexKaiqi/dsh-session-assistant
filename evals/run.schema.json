@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "DSH pet assistant product evaluation run",
+  "title": "DSH Session Assistant product evaluation run",
   "type": "object",
   "required": ["suiteId", "suiteVersion", "executedAt", "environment", "results"],
   "properties": {
@@ -14,7 +14,7 @@
         "type": "object",
         "required": ["caseId", "status", "observedLevel", "evidence"],
         "properties": {
-          "caseId": { "type": "string", "pattern": "^(PET|AST|INT|VOI|E2E|SEC|OPS)-[0-9]{3}$" },
+          "caseId": { "type": "string", "pattern": "^(AST|VOI|SEC|OPS)-[0-9]{3}$" },
           "status": { "enum": ["passed", "failed", "blocked", "not-run"] },
           "observedLevel": { "enum": ["none", "L1", "L2", "L3", "L4"] },
           "evidence": { "type": "string", "minLength": 1 },
