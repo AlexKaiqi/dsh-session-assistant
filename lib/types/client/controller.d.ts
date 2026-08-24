@@ -108,7 +108,7 @@ export interface ControllerDependencies {
     readonly inputActions: InputActionsLike;
     readonly getInput: () => InputStateLike;
     readonly context: (draft?: string) => string | Promise<string>;
-    readonly startConversation: () => Promise<VoiceConversation> | VoiceConversation;
+    readonly startConversation: (initialUserText?: string) => Promise<VoiceConversation> | VoiceConversation;
     readonly dictation?: boolean | (() => boolean);
     /** Called by the UI whenever the current-session snapshot changes (detects primary-Agent questions and replies). */
     readonly observeSession?: (snapshot: unknown) => void;
@@ -157,7 +157,7 @@ export declare class VoiceController {
     get sessionId(): string;
     getSnapshot(): ControllerState;
     subscribe(listener: () => void): () => void;
-    start(): Promise<void>;
+    start(initialUserText?: string): Promise<void>;
     stop(): Promise<void>;
     dispose(): Promise<void>;
     interrupt(): Promise<void>;
@@ -198,6 +198,8 @@ export interface VoiceRouteLike {
     readonly protocol: string;
     readonly available?: boolean;
 }
+/** Match a configurable wake phrase without rewriting the recognized utterance. */
+export declare function matchesWakePhrase(value: string, wakePhrase: string): boolean;
 /** Resolve the configured route, or the first callable route for the selected Realtime protocol. */
 export declare function selectVoiceRoute(settings: SessionAssistantSettings, models: readonly VoiceRouteLike[]): string;
 export declare function voiceConversationOptions(settings: SessionAssistantSettings, context: string, routeId?: string): {

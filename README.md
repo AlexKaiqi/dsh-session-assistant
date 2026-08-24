@@ -14,6 +14,7 @@
 - `dsh-realtime-voice` 对外提供“与 Agent 开始全双工语音对话”的能力；Provider 协议、媒体传输、打断和音频输入仲裁都隐藏在该边界之后。
 - 每个会话以 `session-assistant:<sessionId>` 开始一场 `VoiceConversation`，并用同一 owner 前缀向 `voiceAgent.registerActions` 注册产品动作。动作的授权门仍由本插件持有；若全局 Pet Assistant 或其他语音产品正在占用麦克风，会明确返回冲突。
 - Realtime route 留空表示自动选择：正式会话与试听都会选取所选 Provider 协议下首个可用 route，不会把空 route 传给统一语音底座。
+- 待机唤醒词可在设置中修改。只有包含该唤醒词的最终识别结果会启动 Realtime；整句原话（包括唤醒词）会作为首条用户消息提交，例如“你好助手，继续检查刚才的修改”无需再次复述命令。未命中的转写不持久化。
 - 若 `dsh-personal-knowledge-base` 已启用，Host Remote 在建连前读取有界 `personalKnowledge.project()`；未安装时静默降级，不改变语音权限。
 - **知识整理委派**：语音模型多一个 `organize_notes` 操作——用户说“整理/保存/记住这些讨论”时，立即回传结果（模型继续说话），同时把草稿与当前会话增量交给**专职知识整理 agent**（PKB 的文本模型 maintainer，通过 `sessionAssistantSettings/curate` Remote）；整理完成（更新当前工作投影 + 生成长期知识提案）后在状态条显示并语音播报。整理 agent 只提案不确认，授权门仍在知识库。
 - Session Assistant 不监听或广播任何宠物事件，也不承担全局待机、唤醒或宠物人格；这些能力由独立的 Pet Assistant 拥有。

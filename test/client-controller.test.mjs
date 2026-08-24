@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { VoiceController, selectVoiceRoute, voiceConversationOptions, voiceAgentPreviewOptions } from '../lib/controller.js'
+import { VoiceController, matchesWakePhrase, selectVoiceRoute, voiceConversationOptions, voiceAgentPreviewOptions } from '../lib/controller.js'
 import { buildBoundedContext } from '../lib/index.js'
 
 function harness(initial = 'base') {
@@ -9,6 +9,7 @@ function harness(initial = 'base') {
   let failContext = false
   let curateResult = { available: true, ok: true, proposals: ['p1'], currentUpdated: true }
   const contexts = []
+  const startedWith = []
   const order = []
   const curateCalls = []
   let listener
@@ -26,7 +27,7 @@ function harness(initial = 'base') {
     inputActions: { setDraft(value) { draft = value }, submit() { submitted++; order.push('submit') } },
     getInput: () => ({ draft }),
     context: () => { if (failContext) { failContext = false; throw new Error('knowledge unavailable') } return `draft:${draft}` },
-    startConversation: async () => handle,
+    startConversation: async (initialUserText, initialAudio) => { startedWith.push({ initialUserText, initialAudio }); return handle },
     // Voice Agent action-registry handoff: capture the executors and dispose
     // count so tests drive the same path the runtime uses.
     registerActions: tools => { executors = tools; return () => { disposeCount++ } },
@@ -48,7 +49,7 @@ function harness(initial = 'base') {
   return {
     controller, emit: event => listener?.(event), setDraft: value => { draft = value }, draft: () => draft,
     submitted: () => submitted, failContext: () => { failContext = true }, runTool, contexts, order,
-    closed: () => closed, disposeCount: () => disposeCount, curateCalls,
+    closed: () => closed, disposeCount: () => disposeCount, curateCalls, startedWith,
     setCurateResult: result => { curateResult = result },
   }
 }
@@ -226,6 +227,16 @@ test('standby enters and exits through the wake-word listener and never overlaps
   assert.equal(controller.getSnapshot().status, 'idle')
   // Releases: start() + stop() + exitStandby() = 3.
   assert.equal(exited, 3)
+})
+
+test('a complete wake utterance is preserved as the initial user turn', async () => {
+  assert.equal(matchesWakePhrase('你好，助手！继续检查刚才的修改', '你好助手'), true)
+  assert.equal(matchesWakePhrase('Hello Assistant — summarize this', 'hello assistant'), true)
+  assert.equal(matchesWakePhrase('没有唤醒词', '你好助手'), false)
+  const h = harness()
+  const initialAudio = { pcm16Base64: 'AAAA', sampleRate: 24000 }
+  await h.controller.start('你好，助手！继续检查刚才的修改', initialAudio)
+  assert.deepEqual(h.startedWith, [{ initialUserText: '你好，助手！继续检查刚才的修改', initialAudio }])
 })
 
 test('organize_notes settles immediately and delegates curation to the curator agent asynchronously', async () => {

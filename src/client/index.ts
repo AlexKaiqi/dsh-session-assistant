@@ -7,7 +7,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import sessionAssistantRemote from '../typert-remote.ts'
 import { DEFAULT_SETTINGS, OPENAI_REALTIME_VOICES, type SessionAssistantSettings } from '../settings-values.ts'
 import type { SessionAssistantSettingsView } from '../settings-remote.ts'
-import { VoiceController, selectVoiceRoute, voiceConversationOptions, voiceAgentPreviewOptions, saLog, type InputActionsLike, type InputStateLike, type ActionExecutorMap, type VoiceEvent, type VoiceConversation } from './controller.ts'
+import { VoiceController, matchesWakePhrase, selectVoiceRoute, voiceConversationOptions, voiceAgentPreviewOptions, saLog, type InputActionsLike, type InputStateLike, type ActionExecutorMap, type VoiceEvent, type VoiceConversation } from './controller.ts'
 import { buildBoundedContext, messageText } from './context.ts'
 import { dictionaries, NS, phaseLabel, type SessionAssistantLocaleKey, type SessionAssistantTranslate } from './locales.ts'
 
@@ -20,7 +20,11 @@ interface SettingsPort {
 }
 interface VoiceModel { readonly id: string; readonly protocol: string; readonly displayName?: string; readonly available?: boolean; readonly missingCredential?: string }
 interface BrowserVoice { readonly id: string; readonly name: string; readonly lang: string; readonly default: boolean }
-interface RecognitionHandle { close(): void }
+interface RecognitionHandle {
+  close(): void
+  discardAudio?(): void
+  takeAudio?(): { readonly pcm16Base64: string; readonly sampleRate: number } | undefined
+}
 interface ReadAloudHandle { interrupt(): void; close(): void }
 interface VoiceAgent {
   capabilities(): { readAloud?: boolean; voices?: readonly BrowserVoice[]; recognition?: boolean }
@@ -32,6 +36,7 @@ interface VoiceAgent {
     continuous?: boolean
     interim?: boolean
     preemptible?: boolean
+    captureAudio?: boolean
     onPreempt?(): void
     onTranscript(event: { text: string; final: boolean; resultIndex?: number }): void
     onError(error: { message?: string; code?: string } | string): void
@@ -447,7 +452,7 @@ export async function apply(ctx: ClientContext): Promise<() => Promise<void>> {
         },
         dictation: () => settings().recognitionProvider === 'browser',
         getSession: () => session.current,
-        startConversation: async () => {
+        startConversation: async (initialUserText, initialAudio) => {
           const nextDraft = input.current.draft
           const local = buildBoundedContext(session.current, nextDraft, settings().openaiContextMode)
           let knowledge = ''
@@ -466,17 +471,13 @@ export async function apply(ctx: ClientContext): Promise<() => Promise<void>> {
           const options = voiceConversationOptions(settings(), context, selectVoiceRoute(settings(), models))
           return settings().recognitionProvider === 'browser'
             ? browserRecognitionSession(voiceAgent, settings().recognitionLang, `session-assistant:${sessionId}`, t)
-            : voiceAgent.startConversation({ ...options, ownerId: `session-assistant:${sessionId}` })
+            : voiceAgent.startConversation({ ...options, ownerId: `session-assistant:${sessionId}`, initialUserText, initialAudio })
         },
         standby: {
           enter() {
             if (standbyHandle) return true
-            const wake = settings().wakeWord.trim().toLowerCase()
+            const wake = settings().wakeWord.trim()
             if (!wake || !voiceAgent.capabilities().recognition) return false
-            // Match the wake word inside transcripts even when ASR inserts
-            // punctuation or pauses: "你好，助手" still wakes on "你好助手".
-            const wakeCompact = wake.replace(/[，。！？、,.!?…\s]/g, '')
-            if (!wakeCompact) return false
             try {
               standbyHandle = voiceAgent.recognize({
                 lang: settings().recognitionLang,
@@ -484,14 +485,18 @@ export async function apply(ctx: ClientContext): Promise<() => Promise<void>> {
                 preemptible: true,
                 continuous: true,
                 interim: true,
+                captureAudio: true,
                 onTranscript: event => {
-                  const text = (event.text || '').toLowerCase().replace(/[，。！？、,.!?…\s]/g, '')
-                  if (text && text.includes(wakeCompact)) {
+                  if (!event.final) return
+                  if (matchesWakePhrase(event.text || '', wake)) {
                     const handle = standbyHandle
+                    const captured = handle?.takeAudio?.()
                     standbyHandle = undefined
                     handle?.close()
                     saLog(`wake word matched: ${event.text.slice(0, 60)}`)
-                    void controller!.start()
+                    void controller!.start((event.text || '').trim().slice(0, 20_000), captured)
+                  } else {
+                    standbyHandle?.discardAudio?.()
                   }
                 },
                 onError: () => { /* standby listening is best-effort */ },

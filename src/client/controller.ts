@@ -81,7 +81,7 @@ export interface ControllerDependencies {
   readonly inputActions: InputActionsLike
   readonly getInput: () => InputStateLike
   readonly context: (draft?: string) => string | Promise<string>
-  readonly startConversation: () => Promise<VoiceConversation> | VoiceConversation
+  readonly startConversation: (initialUserText?: string, initialAudio?: { readonly pcm16Base64: string; readonly sampleRate: number }) => Promise<VoiceConversation> | VoiceConversation
   readonly dictation?: boolean | (() => boolean)
   /** Called by the UI whenever the current-session snapshot changes (detects primary-Agent questions and replies). */
   readonly observeSession?: (snapshot: unknown) => void
@@ -164,7 +164,7 @@ export class VoiceController {
     return () => this.listeners.delete(listener)
   }
 
-  async start(): Promise<void> {
+  async start(initialUserText = '', initialAudio?: { readonly pcm16Base64: string; readonly sampleRate: number }): Promise<void> {
     if (this.disposed || this.handle !== undefined || this.state.status === 'opening') return
     this.deps.standby?.exit()
     const generation = ++this.generation
@@ -173,7 +173,7 @@ export class VoiceController {
     this.lastApplied = this.baseline
     this.publish({ status: 'opening', phase: 'connecting', transcript: '', error: undefined, errorCode: undefined, submitNotice: undefined, question: undefined, agentReply: undefined })
     try {
-      const handle = await this.deps.startConversation()
+      const handle = await this.deps.startConversation(initialUserText.trim().slice(0, 20_000), initialAudio)
       if (this.disposed || generation !== this.generation) { await handle.end(); return }
       this.handle = handle
       this.unsubscribe = handle.subscribe(event => { void this.consume(event).catch(error => { if (!this.disposed) this.publish({ status: 'error', error: error instanceof Error ? error.message : String(error) }) }) })
@@ -450,6 +450,15 @@ export class VoiceController {
 }
 
 export interface VoiceRouteLike { readonly id: string; readonly protocol: string; readonly available?: boolean }
+
+const WAKE_SEPARATORS = /[\s,，。.!！?？:：;；'"“”‘’_—–…-]+/g
+
+/** Match a configurable wake phrase without rewriting the recognized utterance. */
+export function matchesWakePhrase(value: string, wakePhrase: string): boolean {
+  const heard = value.toLocaleLowerCase().replace(WAKE_SEPARATORS, '')
+  const phrase = wakePhrase.toLocaleLowerCase().replace(WAKE_SEPARATORS, '')
+  return phrase.length > 0 && heard.includes(phrase)
+}
 
 /** Resolve the configured route, or the first callable route for the selected Realtime protocol. */
 export function selectVoiceRoute(settings: SessionAssistantSettings, models: readonly VoiceRouteLike[]): string {

@@ -1,10 +1,11 @@
 {
-  "version": 8,
+  "version": 9,
   "profileId": "session-assistant",
   "settingsNamespace": "session-assistant",
   "settingsRemote": "sessionAssistantSettings",
   "voiceService": "voiceAgent",
   "routeSelection": "use the configured route or the first available route matching the selected Provider protocol for both normal conversations and previews",
+  "wakeHandoff": "wait for a finalized browser-recognition transcript, match the configured wake word, and pass the complete original transcript including the wake word as voiceAgent.startConversation.initialUserText; unmatched transcripts are not persisted and never start Realtime",
   "audioInputOwner": "session-assistant:<sessionId>",
   "actionRegistryOwner": "session-assistant:<sessionId>",
   "actionExecution": "voiceAgent.registerActions: the voice Agent capability executes action requests, settles results through the control handoff (resolve before follow-up work), and emits action-result",
