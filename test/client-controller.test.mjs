@@ -166,6 +166,14 @@ test('provider selection is data-only and bounded context carries workspace fact
   assert.match(context, /visible context/)
   assert.doesNotMatch(context, /secret|thinking/)
   assert.ok(context.length <= 5200)
+  const hostNodes = {
+    get: id => nodes.get(id),
+    values: () => [...nodes].map(([key, value]) => ({ key, id: key, target: 'chat', ...value })),
+  }
+  const hostContext = buildBoundedContext({ chat: { order: ['visible', 'hidden', 'running'], nodes: hostNodes } }, 'draft', 'recent', metadata)
+  assert.match(hostContext, /visible context/)
+  assert.doesNotMatch(hostContext, /secret|thinking/)
+  assert.doesNotThrow(() => awarenessEventsInSession({ chat: { order: ['visible', 'hidden', 'running'], nodes: hostNodes } }))
   const operationalOnly = buildBoundedContext({}, 'hidden draft', 'off', metadata)
   assert.match(operationalOnly, /\/work\/acme|multi-model-voice/)
   assert.doesNotMatch(operationalOnly, /hidden draft/)

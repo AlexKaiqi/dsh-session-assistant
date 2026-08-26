@@ -4,6 +4,10 @@
 
 暂无未发布变更。
 
+## 0.4.6 (2026-08-26)
+
+- 修复 Session Assistant 读取 DSH rc.2 `ChatNodeStore` 时错误调用不存在的 `entries()`，导致 `conversation.input.dock` 崩溃；现在同时兼容宿主的 `get()`/`values()` 契约与测试使用的标准 `Map`
+
 ## 0.4.5 (2026-08-24)
 
 - **音色试听不卡顿、不截尾**：豆包试听提示音改为快速提交，输出端增加短抖动缓冲；完成状态由 Realtime 本地播放队列与 Provider 空闲共同决定，不再从 `audio.started` 起固定 10 秒强制关闭

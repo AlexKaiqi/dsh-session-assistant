@@ -1,8 +1,13 @@
 import type { ContextMode } from '../settings.ts';
+export interface SessionNodeStoreLike {
+    get(id: string): unknown;
+    values?(): readonly unknown[] | Iterable<unknown>;
+    entries?(): Iterable<readonly [string, unknown]>;
+}
 export interface SessionSnapshotLike {
     readonly chat?: {
         readonly order?: readonly string[];
-        readonly nodes?: Map<string, unknown>;
+        readonly nodes?: SessionNodeStoreLike;
     };
 }
 /** Host-owned facts that let the voice frontend route work without reading the workspace itself. */

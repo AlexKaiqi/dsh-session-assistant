@@ -1,6 +1,12 @@
 import type { ContextMode } from '../settings.ts'
 
-export interface SessionSnapshotLike { readonly chat?: { readonly order?: readonly string[]; readonly nodes?: Map<string, unknown> } }
+export interface SessionNodeStoreLike {
+  get(id: string): unknown
+  values?(): readonly unknown[] | Iterable<unknown>
+  entries?(): Iterable<readonly [string, unknown]>
+}
+
+export interface SessionSnapshotLike { readonly chat?: { readonly order?: readonly string[]; readonly nodes?: SessionNodeStoreLike } }
 
 /** Host-owned facts that let the voice frontend route work without reading the workspace itself. */
 export interface SessionContextMetadata {
@@ -129,8 +135,18 @@ function nodeEntries(session: SessionSnapshotLike): SessionNodeEntry[] {
     seen.add(id)
     entries.push({ id, ...(value as Omit<SessionNodeEntry, 'id'>) })
   }
-  for (const [id, value] of nodes.entries()) {
-    if (!seen.has(id)) entries.push({ id, ...(value as Omit<SessionNodeEntry, 'id'>) })
+  if (typeof nodes.entries === 'function') {
+    for (const [id, value] of nodes.entries()) {
+      if (!seen.has(id)) entries.push({ id, ...(value as Omit<SessionNodeEntry, 'id'>) })
+    }
+  } else if (typeof nodes.values === 'function') {
+    for (const value of nodes.values()) {
+      const candidate = value as { key?: unknown; id?: unknown }
+      const key = typeof candidate.key === 'string'
+        ? candidate.key
+        : typeof candidate.id === 'string' ? candidate.id : ''
+      if (key && !seen.has(key)) entries.push({ id: key, ...(value as Omit<SessionNodeEntry, 'id'>) })
+    }
   }
   return entries
 }

@@ -6,6 +6,12 @@ const source = await readFile(new URL('../src/client/index.ts', import.meta.url)
 const controller = await readFile(new URL('../src/client/controller.ts', import.meta.url), 'utf8')
 const locales = await readFile(new URL('../src/client/locales.ts', import.meta.url), 'utf8')
 
+test('model-visible version matches package.json', async () => {
+  const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'))
+  const help = await readFile(new URL('../src/help.ts', import.meta.url), 'utf8')
+  assert.match(help, new RegExp(`VERSION = ['\"]${pkg.version.replaceAll('.', '\\.') }['\"]`))
+})
+
 test('client registers exactly the three current-Session product Slots', () => {
   const names = [...source.matchAll(/ctx\.slots\.inject\('([^']+)'/g)].map(match => match[1])
   assert.deepEqual(names, ['conversation.input.right', 'conversation.input.dock', 'settings.section'])
