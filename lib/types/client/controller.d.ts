@@ -232,12 +232,14 @@ export interface VoiceRouteLike {
     readonly protocol: string;
     readonly available?: boolean;
 }
+export type DuplexVoiceProtocol = 'openai-webrtc' | 'doubao-realtime-duplex';
 /** Match a configurable wake phrase without rewriting the recognized utterance. */
 export declare function matchesWakePhrase(value: string, wakePhrase: string): boolean;
 /** Resolve the configured route, or the first callable route for the selected Realtime protocol. */
 export declare function selectVoiceRoute(settings: SessionAssistantSettings, models: readonly VoiceRouteLike[]): string;
 export declare function voiceConversationOptions(settings: SessionAssistantSettings, context: string, routeId?: string): {
     routeId: string;
+    protocol: string;
     profileId: string;
     context: string;
     language: import("../settings-values.ts").RecognitionLanguage;
@@ -245,6 +247,7 @@ export declare function voiceConversationOptions(settings: SessionAssistantSetti
 /** Open an interactive audition using the selected Realtime model and voice. */
 export declare function voiceAgentPreviewOptions(settings: SessionAssistantSettings, routeId?: string): {
     routeId: string;
+    protocol: "openai-webrtc" | "doubao-realtime-duplex";
     profileId: string;
     outputOnly: boolean;
     previewText: string;

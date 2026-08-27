@@ -1,3 +1,3 @@
-export declare const VERSION = "0.4.6";
+export declare const VERSION = "0.4.7";
 export declare const HELP = "Session Assistant voice commands\n\nDiscussion and drafting:\n  discuss \u2014 speak naturally without changing the draft.\n  draft \u2014 dictate or request an edit.\n  finalize \u2014 say \u201C\u6574\u7406\u6210\u6700\u7EC8\u7A3F\u201D to polish and mark it ready.\n\nPrimary Agent handoff:\n  submit \u2014 say \u201C\u63D0\u4EA4\u7ED9 Agent\u201D only when the final request should be sent and executed.\n\nConnection:\n  end \u2014 say \u201C\u7ED3\u675F\u8BED\u97F3\u201D to close without submitting.\n\nThe voice model cannot execute work itself and cannot access Agent tools or credentials.";
 //# sourceMappingURL=help.d.ts.map

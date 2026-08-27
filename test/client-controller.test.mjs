@@ -153,7 +153,7 @@ test('disposing the controller unregisters its tools from the runtime registry',
 
 test('provider selection is data-only and bounded context carries workspace facts while excluding hidden/running nodes', () => {
   assert.deepEqual(voiceConversationOptions({ recognitionProvider: 'openai-realtime', recognitionLang: 'zh-CN', openaiRealtimeModel: 'route', openaiRealtimeVoice: 'cedar', doubaoRealtimeModel: '', openaiContextMode: 'recent', wakeWord: '你好助手' }, 'ctx'), {
-    routeId: 'route', profileId: 'session-assistant-openai-cedar', context: 'ctx', language: 'zh-CN',
+    routeId: 'route', protocol: 'openai-webrtc', profileId: 'session-assistant-openai-cedar', context: 'ctx', language: 'zh-CN',
   })
   const nodes = new Map([
     ['visible', { kind: 'user', data: { content: [{ type: 'text', text: 'visible context' }] } }],
@@ -182,12 +182,12 @@ test('provider selection is data-only and bounded context carries workspace fact
 test('the voice preview opens an interactive conversation on the selected model and voice', () => {
   const base = { recognitionProvider: 'browser', recognitionLang: 'zh-CN', openaiRealtimeModel: '', openaiRealtimeVoice: 'marin', doubaoRealtimeModel: '', openaiContextMode: 'recent', wakeWord: '你好助手' }
   assert.deepEqual(voiceAgentPreviewOptions({ ...base, recognitionProvider: 'doubao-realtime', doubaoRealtimeModel: 'doubao/voice-a' }), {
-    routeId: 'doubao/voice-a', profileId: 'session-assistant-preview',
+    routeId: 'doubao/voice-a', protocol: 'doubao-realtime-duplex', profileId: 'session-assistant-preview',
     outputOnly: false,
     previewText: '请先简短地和我打个招呼，然后等我继续和你对话。',
   })
   assert.deepEqual(voiceAgentPreviewOptions({ ...base, recognitionProvider: 'openai-realtime', openaiRealtimeModel: 'openai/gpt-realtime', openaiRealtimeVoice: 'cedar' }), {
-    routeId: 'openai/gpt-realtime', profileId: 'session-assistant-preview-openai-cedar',
+    routeId: 'openai/gpt-realtime', protocol: 'openai-webrtc', profileId: 'session-assistant-preview-openai-cedar',
     outputOnly: false,
     previewText: '请先简短地和我打个招呼，然后等我继续和你对话。',
   })
@@ -222,7 +222,18 @@ test('an empty configured route selects the first callable model for both conver
   assert.equal(routeId, 'doubao/available')
   assert.equal(voiceConversationOptions(settings, 'ctx', routeId).routeId, 'doubao/available')
   assert.equal(voiceAgentPreviewOptions(settings, routeId).routeId, 'doubao/available')
-  assert.equal(selectVoiceRoute({ ...settings, doubaoRealtimeModel: 'doubao/pinned' }, models), 'doubao/pinned')
+  assert.equal(selectVoiceRoute({ ...settings, doubaoRealtimeModel: 'doubao/available' }, models), 'doubao/available')
+  assert.equal(selectVoiceRoute({ ...settings, doubaoRealtimeModel: 'openai/available' }, models), 'doubao/available')
+  assert.equal(selectVoiceRoute({ ...settings, doubaoRealtimeModel: 'doubao/unavailable' }, models), 'doubao/available')
+})
+
+test('an empty startup catalog preserves the selected duplex protocol for Host auto-selection', () => {
+  const settings = { recognitionProvider: 'doubao-realtime', recognitionLang: 'zh-CN', openaiRealtimeModel: '', openaiRealtimeVoice: 'marin', doubaoRealtimeModel: '', openaiContextMode: 'recent', wakeWord: '你好助手' }
+  const routeId = selectVoiceRoute(settings, [])
+  assert.equal(routeId, '')
+  assert.deepEqual(voiceConversationOptions(settings, 'ctx', routeId), {
+    routeId: '', protocol: 'doubao-realtime-duplex', profileId: 'session-assistant', context: 'ctx', language: 'zh-CN',
+  })
 })
 
 test('observeSession surfaces primary-Agent questions and announces replies after submission', async () => {

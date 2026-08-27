@@ -1,10 +1,10 @@
 {
-  "version": 11,
+  "version": 12,
   "profileId": "session-assistant",
   "settingsNamespace": "session-assistant",
   "settingsRemote": "sessionAssistantSettings",
   "voiceService": "voiceAgent",
-  "routeSelection": "use the configured route or the first available route matching the selected Provider protocol for both normal conversations and previews",
+  "routeSelection": "refresh the catalog at connection time, use a configured route only when its protocol and availability match, otherwise use the first available route for the selected Provider; always pass the duplex protocol so the Host can auto-select when the client catalog is temporarily empty",
   "wakeHandoff": "retain bounded PCM in browser memory, wait for a finalized transcript, match the configured wake word, and pass the complete original transcript plus PCM including the wake word as the initial voiceAgent turn; unmatched audio is discarded, never persisted, and never starts Realtime",
   "audioInputOwner": "session-assistant:<sessionId>",
   "actionRegistryOwner": "session-assistant:<sessionId>",

@@ -4,6 +4,10 @@
 
 暂无未发布变更。
 
+## 0.4.7 (2026-08-27)
+
+- 修复 Realtime 模型目录在 Client 启动阶段为空或保存了过期/错协议路由时，语音启动误报 “The selected voice route does not support a duplex Agent conversation”：每次建连前刷新目录、校验已选路由，并显式传递所选 Provider 的双工协议；目录短暂不可用时由 Host 按协议自动选择可用路由
+
 ## 0.4.6 (2026-08-26)
 
 - 修复 Session Assistant 读取 DSH rc.2 `ChatNodeStore` 时错误调用不存在的 `entries()`，导致 `conversation.input.dock` 崩溃；现在同时兼容宿主的 `get()`/`values()` 契约与测试使用的标准 `Map`

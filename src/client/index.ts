@@ -454,6 +454,11 @@ export async function apply(ctx: ClientContext): Promise<() => Promise<void>> {
         getSession: () => session.current,
         getSessionMetadata: () => metadata.current,
         startConversation: async (initialUserText, initialAudio) => {
+          // The catalog can be empty during early client startup even though the
+          // Host routes are already callable. Refresh at connection time so a
+          // pinned route is validated against current protocol/availability;
+          // the explicit protocol still lets the Host auto-select on failure.
+          try { models = await voiceAgent.models() } catch { /* Host protocol fallback remains available. */ }
           const nextDraft = input.current.draft
           const local = `${buildBoundedContext(session.current, nextDraft, settings().openaiContextMode, metadata.current)}\n\n${assistantSettingsContext(settings())}`
           let knowledge = ''

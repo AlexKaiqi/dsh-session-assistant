@@ -568,6 +568,8 @@ export class VoiceController {
 
 export interface VoiceRouteLike { readonly id: string; readonly protocol: string; readonly available?: boolean }
 
+export type DuplexVoiceProtocol = 'openai-webrtc' | 'doubao-realtime-duplex'
+
 const WAKE_SEPARATORS = /[\s,，。.!！?？:：;；'"“”‘’_—–…-]+/g
 
 /** Match a configurable wake phrase without rewriting the recognized utterance. */
@@ -581,16 +583,18 @@ export function matchesWakePhrase(value: string, wakePhrase: string): boolean {
 export function selectVoiceRoute(settings: SessionAssistantSettings, models: readonly VoiceRouteLike[]): string {
   if (settings.recognitionProvider === 'browser') return ''
   const configured = settings.recognitionProvider === 'openai-realtime' ? settings.openaiRealtimeModel : settings.doubaoRealtimeModel
-  if (configured) return configured
-  const protocol = settings.recognitionProvider === 'openai-realtime' ? 'openai-webrtc' : 'doubao-realtime-duplex'
+  const protocol: DuplexVoiceProtocol = settings.recognitionProvider === 'openai-realtime' ? 'openai-webrtc' : 'doubao-realtime-duplex'
+  const selected = models.find(model => model.id === configured)
+  if (selected?.protocol === protocol && selected.available !== false) return selected.id
   return models.find(model => model.protocol === protocol && model.available !== false)?.id ?? ''
 }
 
-export function voiceConversationOptions(settings: SessionAssistantSettings, context: string, routeId = '') {
+export function voiceConversationOptions(settings: SessionAssistantSettings, context: string, routeId?: string) {
   const browser = settings.recognitionProvider === 'browser'
   const openai = settings.recognitionProvider === 'openai-realtime'
   return {
-    routeId: browser ? '' : routeId || (openai ? settings.openaiRealtimeModel : settings.doubaoRealtimeModel),
+    routeId: browser ? '' : routeId ?? (openai ? settings.openaiRealtimeModel : settings.doubaoRealtimeModel),
+    protocol: browser ? '' : openai ? 'openai-webrtc' as const : 'doubao-realtime-duplex' as const,
     profileId: openai ? `session-assistant-openai-${settings.openaiRealtimeVoice}` : 'session-assistant',
     context,
     language: settings.recognitionLang,
@@ -598,13 +602,14 @@ export function voiceConversationOptions(settings: SessionAssistantSettings, con
 }
 
 /** Open an interactive audition using the selected Realtime model and voice. */
-export function voiceAgentPreviewOptions(settings: SessionAssistantSettings, routeId = '') {
+export function voiceAgentPreviewOptions(settings: SessionAssistantSettings, routeId?: string) {
   const openai = settings.recognitionProvider === 'openai-realtime'
   const previewText = settings.recognitionLang === 'zh-CN'
     ? '请先简短地和我打个招呼，然后等我继续和你对话。'
     : 'Greet me briefly, then wait for me to continue the conversation.'
   return {
-    routeId: routeId || (openai ? settings.openaiRealtimeModel : settings.doubaoRealtimeModel),
+    routeId: routeId ?? (openai ? settings.openaiRealtimeModel : settings.doubaoRealtimeModel),
+    protocol: openai ? 'openai-webrtc' as const : 'doubao-realtime-duplex' as const,
     profileId: openai ? `session-assistant-preview-openai-${settings.openaiRealtimeVoice}` : 'session-assistant-preview',
     outputOnly: false,
     previewText,
