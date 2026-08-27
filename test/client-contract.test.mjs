@@ -19,6 +19,7 @@ test('client registers exactly the three current-Session product Slots', () => {
   assert.match(source, /id: 'session-assistant-status'/)
   assert.match(source, /function MicControl/)
   assert.match(source, /function VoiceDock/)
+  assert.doesNotMatch(source, /props\.t\('interrupt'\)/)
   assert.match(source, /ctx\.remote\.\$mount\(sessionAssistantRemote\)/)
   assert.match(source, /ctx\.get\('remote\.sessionAssistantSettings'\)/)
   assert.match(source, /remote\.describe\(\)/)

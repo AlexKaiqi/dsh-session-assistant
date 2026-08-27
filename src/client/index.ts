@@ -193,7 +193,6 @@ function VoiceDock(props: SlotProps) {
     state.planNotice ? React.createElement('div', { key: 'plan', className: 'sa-plan' }, planNoticeText(props.t, state.planNotice)) : null,
     state.transcript ? React.createElement('div', { key: 'text', className: 'sa-transcript' }, state.transcript) : null,
     state.error ? React.createElement('div', { key: 'error', className: 'sa-error' }, voiceErrorText(props.t, state.error, state.errorCode)) : null,
-    state.phase === 'speaking' ? React.createElement('button', { key: 'interrupt', type: 'button', onClick: () => { void controller.interrupt() } }, props.t('interrupt')) : null,
   ])
 }
 
