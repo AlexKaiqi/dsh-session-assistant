@@ -175,7 +175,7 @@ export class VoiceController {
   private stepBaseline: number | undefined
   /** Stable assistant-step cursor used to extract the final reply for composed TTS. */
   private replyCursor: string | undefined
-  private readonly finalReplyWaiters = new Set<(reply: AgentFinalReply) => void>()
+  private finalReplyWaiter: { resolve(reply: AgentFinalReply): void; reject(error: unknown): void } | undefined
   /** Accumulated finalized voice-discussion transcript of the current session, kept for curation. */
   private discussion = ''
   /** Discussion snapshot at the last successful curation; only the delta after it is re-curated. */
@@ -244,6 +244,8 @@ export class VoiceController {
   async dispose(): Promise<void> {
     if (this.disposed) return
     this.disposed = true
+    this.finalReplyWaiter?.reject(new DOMException('Session Assistant disposed', 'AbortError'))
+    this.finalReplyWaiter = undefined
     this.disposeTools()
     await this.stop()
     this.publish({ status: 'closed', phase: 'closed' })
@@ -312,10 +314,11 @@ export class VoiceController {
       saLog('primary agent replied after submission')
     }
     const reply = finalAgentReplyAfter(snapshot as SessionSnapshotLike, this.replyCursor)
-    if (reply && this.finalReplyWaiters.size > 0) {
+    if (reply && this.finalReplyWaiter) {
       this.replyCursor = reply.nodeKey
-      for (const resolve of this.finalReplyWaiters) resolve(reply)
-      this.finalReplyWaiters.clear()
+      const waiter = this.finalReplyWaiter
+      this.finalReplyWaiter = undefined
+      waiter.resolve(reply)
     }
   }
 
@@ -324,16 +327,24 @@ export class VoiceController {
     const transcript = text.trim()
     if (!transcript) return Promise.reject(new Error('Recognized text is empty'))
     if (this.disposed) return Promise.reject(new Error('Session Assistant is disposed'))
+    if (this.finalReplyWaiter) {
+      this.finalReplyWaiter.reject(new DOMException('Superseded by a newer composed turn', 'AbortError'))
+      this.finalReplyWaiter = undefined
+    }
     const session = this.deps.getSession?.() as SessionSnapshotLike | undefined
     this.replyCursor = session ? assistantReplyCursor(session) : undefined
-    this.deps.inputActions.setDraft(transcript)
-    this.deps.inputActions.submit()
     return new Promise<AgentFinalReply>((resolve, reject) => {
       const done = (reply: AgentFinalReply) => { signal.removeEventListener('abort', aborted); resolve(reply) }
-      const aborted = () => { this.finalReplyWaiters.delete(done); reject(signal.reason ?? new DOMException('Aborted', 'AbortError')) }
-      this.finalReplyWaiters.add(done)
+      const fail = (error: unknown) => { signal.removeEventListener('abort', aborted); reject(error) }
+      const aborted = () => {
+        if (this.finalReplyWaiter?.resolve === done) this.finalReplyWaiter = undefined
+        fail(signal.reason ?? new DOMException('Aborted', 'AbortError'))
+      }
+      this.finalReplyWaiter = { resolve: done, reject: fail }
       signal.addEventListener('abort', aborted, { once: true })
-      if (signal.aborted) aborted()
+      if (signal.aborted) return aborted()
+      this.deps.inputActions.setDraft(transcript)
+      this.deps.inputActions.submit()
     })
   }
 
@@ -632,8 +643,8 @@ export function voiceConversationOptions(settings: SessionAssistantSettings, con
 export function voiceAgentPreviewOptions(settings: SessionAssistantSettings, routeId?: string) {
   const openai = settings.recognitionProvider === 'openai-realtime'
   const previewText = settings.recognitionLang === 'zh-CN'
-    ? '请简短欢迎我，并告诉我可以直接问你这个会话助手插件能做什么、有什么边界或推荐工作流，然后等我继续提问。'
-    : 'Welcome me briefly, explain that I can ask what the Session Assistant plugin can do, its boundaries, or recommended workflows, then wait for my questions.'
+    ? '请以 Session Assistant 产品向导的身份主动介绍你是谁、你的定位、三到四项核心能力、与主 Agent 的分工和能力边界，然后邀请我继续询问。'
+    : 'As the Session Assistant Product Guide, proactively introduce who you are, your positioning, three or four core capabilities, how you work with the primary Agent, and your boundaries, then invite my questions.'
   return {
     routeId: routeId ?? (openai ? settings.openaiRealtimeModel : settings.doubaoRealtimeModel),
     protocol: openai ? 'openai-webrtc' as const : 'doubao-realtime-duplex' as const,

@@ -9,7 +9,10 @@ export { Config, OPENAI_REALTIME_VOICES, PROMPT, SESSION_ASSISTANT_PRODUCT_KNOWL
 export * from './migration.ts';
 export * from './settings.ts';
 export * from './settings-remote.ts';
+export * from './voice-media.ts';
 export * from './voice-pipeline.ts';
+export * from './composed-pipeline-host.ts';
+export * from './composed-voice-remote.ts';
 export { sessionAssistantRemoteDescriptors } from './remote-contract.ts';
 export { awarenessEventsInSession, buildBoundedContext } from './client/context.ts';
 export type { PlanItem, PlanItemStatus, UserAwarenessEvent } from './client/context.ts';

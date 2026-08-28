@@ -56,6 +56,6 @@ pnpm install --frozen-lockfile
 pnpm check
 ```
 
-`pnpm check` 包含 peer 依赖检查、类型检查、评测发布门、构建、37 项行为测试和 npm 包内容审计。真实 Provider 产品链需显式授权计费调用后运行 `pnpm test:e2e:live`；该用例把生成语音送入浏览器虚拟麦克风，经统一 `voiceAgent` 和真实 Realtime Provider，最终断言真实草稿执行器修改草稿且未越权提交。
+`pnpm check` 包含 peer 依赖检查、类型检查、评测发布门、构建、47 项行为测试和 npm 包内容审计。真实 Provider 产品链需显式授权计费调用后运行 `pnpm test:e2e:live`；该用例把生成语音送入浏览器虚拟麦克风，经统一 `voiceAgent` 和真实 Realtime Provider，最终断言真实草稿执行器修改草稿且未越权提交。
 
 常见问题：语音导览不可用通常表示没有可调用的 Realtime route；麦克风失败会以稳定错误码本地化显示；其他语音产品占用麦克风时会明确返回 `audio_input_busy`，不会并行采集。

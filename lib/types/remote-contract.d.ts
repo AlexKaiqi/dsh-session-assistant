@@ -90,6 +90,7 @@ export declare function sessionAssistantRemoteDescriptors(): ({
         line: number;
         column: number;
     };
+    cancellation?: never;
 } | {
     id: string;
     service: string;
@@ -127,6 +128,7 @@ export declare function sessionAssistantRemoteDescriptors(): ({
         line: number;
         column: number;
     };
+    cancellation?: never;
 } | {
     id: string;
     service: string;
@@ -159,6 +161,81 @@ export declare function sessionAssistantRemoteDescriptors(): ({
             proposals: z.ZodArray<z.ZodString>;
             currentUpdated: z.ZodBoolean;
             error: z.ZodOptional<z.ZodString>;
+        }, z.core.$strict>;
+    };
+    sourceLocation: {
+        file: string;
+        line: number;
+        column: number;
+    };
+    cancellation?: never;
+} | {
+    id: string;
+    service: string;
+    namespace: string;
+    method: string;
+    invocation: {
+        kind: "direct";
+    };
+    parameters: {
+        name: string;
+        wire: "request";
+        source: "json";
+        codec: {
+            mode: "strict";
+            typeSymbol: string;
+            schema: z.ZodObject<{
+                routeId: z.ZodString;
+                inputArtifactId: z.ZodUUID;
+            }, z.core.$strict>;
+        };
+    }[];
+    cancellation: {
+        parameter: "signal";
+    };
+    result: {
+        mode: "strict";
+        typeSymbol: string;
+        schema: z.ZodObject<{
+            text: z.ZodString;
+        }, z.core.$strict>;
+    };
+    sourceLocation: {
+        file: string;
+        line: number;
+        column: number;
+    };
+} | {
+    id: string;
+    service: string;
+    namespace: string;
+    method: string;
+    invocation: {
+        kind: "direct";
+    };
+    parameters: {
+        name: string;
+        wire: "request";
+        source: "json";
+        codec: {
+            mode: "strict";
+            typeSymbol: string;
+            schema: z.ZodObject<{
+                routeId: z.ZodString;
+                text: z.ZodString;
+                speaker: z.ZodOptional<z.ZodString>;
+            }, z.core.$strict>;
+        };
+    }[];
+    cancellation: {
+        parameter: "signal";
+    };
+    result: {
+        mode: "strict";
+        typeSymbol: string;
+        schema: z.ZodObject<{
+            uri: z.ZodString;
+            mediaType: z.ZodLiteral<"audio/mpeg">;
         }, z.core.$strict>;
     };
     sourceLocation: {

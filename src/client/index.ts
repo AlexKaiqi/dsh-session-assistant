@@ -9,9 +9,15 @@ import { DEFAULT_SETTINGS, OPENAI_REALTIME_VOICES, type SessionAssistantSettings
 import type { SessionAssistantSettingsView } from '../settings-remote.ts'
 import { VoiceController, assistantSettingsContext, matchesWakePhrase, selectVoiceRoute, voiceConversationOptions, voiceAgentPreviewOptions, saLog, type InputActionsLike, type InputStateLike, type ActionExecutorMap, type VoiceEvent, type VoiceConversation } from './controller.ts'
 import { buildBoundedContext, type SessionContextMetadata } from './context.ts'
+import { captureComposedUtterance, playAudioUri } from './composed-capture.ts'
+import { ComposedVoiceTurn, composedPipeline, type ComposedVoicePhase } from '../voice-pipeline.ts'
 import { dictionaries, NS, phaseLabel, type SessionAssistantLocaleKey, type SessionAssistantTranslate } from './locales.ts'
 
 interface RemoteResult<T> { readonly ok: boolean; readonly value?: T; readonly error?: { readonly message: string } }
+interface ComposedVoicePort {
+  transcribe(request: { routeId: string; inputArtifactId: string }, signal?: AbortSignal): Promise<RemoteResult<{ text: string }>>
+  synthesize(request: { routeId: string; text: string; speaker?: string }, signal?: AbortSignal): Promise<RemoteResult<{ uri: string; mediaType: 'audio/mpeg' }>>
+}
 interface SettingsPort {
   describe(): Promise<RemoteResult<SessionAssistantSettingsView>>
   save(request: { expectedRevision: number; settings: SessionAssistantSettings }): Promise<RemoteResult<SessionAssistantSettingsView>>
@@ -22,12 +28,14 @@ interface VoiceModel { readonly id: string; readonly protocol: string; readonly 
 interface RecognitionHandle {
   close(): void
   discardAudio?(): void
+  markAudioUtterance?(): void
   takeAudio?(): { readonly pcm16Base64: string; readonly sampleRate: number } | undefined
 }
 interface VoiceAgent {
   capabilities(): { recognition?: boolean }
   models(): Promise<readonly VoiceModel[]>
   startConversation(options: Record<string, unknown>): Promise<VoiceConversation>
+  uploadCapturedAudio(audio: { pcm16Base64: string; sampleRate: number }, signal?: AbortSignal): Promise<{ id: string; sampleRate: number; channels: 1; format: 'pcm_s16le' }>
   recognize(options: {
     lang: string
     ownerId: string
@@ -59,6 +67,7 @@ interface SlotProps {
   controllerFor?: (sessionId: string, inputActions: InputActionsLike, input: React.MutableRefObject<InputStateLike>, session: React.MutableRefObject<SessionSnapshotLike>, metadata: React.MutableRefObject<SessionContextMetadata>) => VoiceController
   settings?: () => SessionAssistantSettings
   voiceAgent?: VoiceAgent
+  composedVoice?: ComposedVoicePort
   t: SessionAssistantTranslate
 }
 
@@ -143,10 +152,20 @@ function MicIcon() {
 function MicControl(props: SlotProps) {
   const controller = useController(props)
   const state = useControllerState(controller)
-  React.useEffect(() => () => { void controller.stop() }, [controller])
-  const active = state.status === 'opening' || state.status === 'active'
-  const standby = state.status === 'standby'
-  const wake = (props.settings?.() ?? DEFAULT_SETTINGS).wakeWord.trim()
+  const [composedPhase, setComposedPhase] = React.useState<ComposedVoicePhase>('idle')
+  const composedAbort = React.useRef<AbortController>()
+  const composedTurn = React.useRef<ComposedVoiceTurn<{ id: string }, { uri: string }, { text: string }>>()
+  React.useEffect(() => () => {
+    composedAbort.current?.abort()
+    composedTurn.current?.cancel()
+    void controller.stop()
+  }, [controller])
+  const settings = props.settings?.() ?? DEFAULT_SETTINGS
+  const composed = settings.recognitionProvider === 'composed'
+  const composedActive = !['idle', 'cancelled', 'failed'].includes(composedPhase)
+  const active = composed ? composedActive : state.status === 'opening' || state.status === 'active'
+  const standby = !composed && state.status === 'standby'
+  const wake = settings.wakeWord.trim()
   const pressTimer = React.useRef<number>()
   const longPressed = React.useRef(false)
   const cancelPress = () => {
@@ -154,12 +173,54 @@ function MicControl(props: SlotProps) {
     pressTimer.current = undefined
   }
   React.useEffect(() => cancelPress, [])
+  const runComposed = async () => {
+    if (!props.voiceAgent || !props.composedVoice) throw new Error('Composed voice services are unavailable')
+    if (!settings.composedAsrRoute.trim() || !settings.composedTtsRoute.trim()) throw new Error('Explicit ASR and TTS routes are required')
+    if (settings.composedLanguageSource !== 'current-session') throw new Error('Fixed composed language models are not enabled')
+    const outer = new AbortController()
+    composedAbort.current = outer
+    setComposedPhase('recording')
+    try {
+      const captured = await captureComposedUtterance({ voiceAgent: props.voiceAgent, language: settings.recognitionLang, ownerId: `session-assistant:${props.sessionId}:composed`, signal: outer.signal })
+      const artifact = await props.voiceAgent.uploadCapturedAudio(captured, outer.signal)
+      const pipeline = composedPipeline({ asrRouteId: settings.composedAsrRoute, ttsRouteId: settings.composedTtsRoute })
+      const turn = new ComposedVoiceTurn<{ id: string }, { uri: string }, { text: string }>(pipeline, {
+        transcribe: async (audio, stage, signal) => {
+          const result = await props.composedVoice!.transcribe({ routeId: stage.routeId, inputArtifactId: audio.id }, signal)
+          if (!result.ok || !result.value) throw new Error(result.error?.message || 'Speech transcription failed')
+          return result.value.text
+        },
+        submit: (text, _stage, signal) => controller.submitRecognizedText(text, signal),
+        replyText: reply => reply.text,
+        synthesize: async (text, stage, signal) => {
+          const result = await props.composedVoice!.synthesize({ routeId: stage.routeId, text }, signal)
+          if (!result.ok || !result.value) throw new Error(result.error?.message || 'Speech synthesis failed')
+          return { uri: result.value.uri }
+        },
+        play: (audio, signal) => playAudioUri(audio.uri, signal),
+        onPhase: setComposedPhase,
+      })
+      composedTurn.current = turn
+      await turn.run({ id: artifact.id })
+    } catch (error) {
+      setComposedPhase(outer.signal.aborted ? 'cancelled' : 'failed')
+      throw error
+    } finally {
+      if (composedAbort.current === outer) composedAbort.current = undefined
+      composedTurn.current = undefined
+    }
+  }
   const onClick = () => {
     if (longPressed.current) { longPressed.current = false; return }
+    if (composed) {
+      if (active) { composedAbort.current?.abort(); composedTurn.current?.cancel(); return }
+      void runComposed().catch(error => saLog(`composed turn failed: ${error instanceof Error ? error.message : String(error)}`))
+      return
+    }
     void (active ? controller.stop() : controller.start())
   }
   const onPointerDown = () => {
-    if (!controller.canEnterStandby) return
+    if (composed || !controller.canEnterStandby) return
     longPressed.current = false
     cancelPress()
     pressTimer.current = window.setTimeout(() => {
@@ -167,7 +228,7 @@ function MicControl(props: SlotProps) {
       void controller.enterStandby()
     }, 650)
   }
-  const idleTitle = controller.canEnterStandby ? `${props.t('startVoiceSession')}（${props.t('standbyTitle')}）` : props.t('startVoiceSession')
+  const idleTitle = controller.canEnterStandby && !composed ? `${props.t('startVoiceSession')}（${props.t('standbyTitle')}）` : props.t('startVoiceSession')
   const title = standby ? `${props.t('wakeByVoice')}${wake ? `（${wake}）` : ''}` : active ? props.t('stopVoiceSession') : idleTitle
   return React.createElement('button', {
     type: 'button', className: standby ? 'sa-icon sa-mic sa-mic-standby' : active ? 'sa-icon sa-mic sa-mic-active' : 'sa-icon sa-mic',
@@ -353,15 +414,13 @@ function SettingsSection(props: { store: SettingsStore; models: readonly VoiceMo
   ])
   return React.createElement('div', { className: 'sa-settings' }, [
     row('provider', props.t('provider'), React.createElement('select', { value: draft.recognitionProvider, onChange: (event: React.ChangeEvent<HTMLSelectElement>) => field('recognitionProvider', event.target.value as SessionAssistantSettings['recognitionProvider']) }, [
-      React.createElement('option', { key: 'browser', value: 'browser' }, props.t('browserRecognition')), React.createElement('option', { key: 'openai', value: 'openai-realtime' }, props.t('openaiRealtime')), React.createElement('option', { key: 'doubao', value: 'doubao-realtime' }, props.t('doubaoRealtime')), React.createElement('option', { key: 'composed', value: 'composed' }, '组合式 ASR → Session Agent → TTS'),
+      React.createElement('option', { key: 'browser', value: 'browser' }, props.t('browserRecognition')), React.createElement('option', { key: 'openai', value: 'openai-realtime' }, props.t('openaiRealtime')), React.createElement('option', { key: 'doubao', value: 'doubao-realtime' }, props.t('doubaoRealtime')), React.createElement('option', { key: 'composed', value: 'composed' }, '组合式 ASR → 当前 Session Agent → TTS'),
     ])),
     row('language', props.t('recognitionLanguage'), React.createElement('select', { value: draft.recognitionLang, onChange: (event: React.ChangeEvent<HTMLSelectElement>) => field('recognitionLang', event.target.value as SessionAssistantSettings['recognitionLang']) }, [React.createElement('option', { key: 'zh', value: 'zh-CN' }, props.t('chinese')), React.createElement('option', { key: 'en', value: 'en-US' }, props.t('english'))])),
     draft.recognitionProvider !== 'browser' && draft.recognitionProvider !== 'composed' ? row('model', props.t('realtimeModel'), React.createElement('select', { value: draft.recognitionProvider === 'openai-realtime' ? draft.openaiRealtimeModel : draft.doubaoRealtimeModel, onChange: (event: React.ChangeEvent<HTMLSelectElement>) => field(draft.recognitionProvider === 'openai-realtime' ? 'openaiRealtimeModel' : 'doubaoRealtimeModel', event.target.value) }, [React.createElement('option', { key: 'auto', value: '' }, props.t('autoSelect')), ...models.map(model => React.createElement('option', { key: model.id, value: model.id }, model.displayName || model.id))])) : null,
     draft.recognitionProvider === 'composed' ? row('composedAsr', 'ASR 路由（显式）', React.createElement('input', { value: draft.composedAsrRoute, placeholder: 'doubao-agent-plan/seed-asr-2.0-stream', onChange: (event: React.ChangeEvent<HTMLInputElement>) => field('composedAsrRoute', event.target.value) })) : null,
     draft.recognitionProvider === 'composed' ? row('composedTts', 'TTS 路由（显式）', React.createElement('input', { value: draft.composedTtsRoute, placeholder: 'doubao-agent-plan/seed-tts-2.0-http', onChange: (event: React.ChangeEvent<HTMLInputElement>) => field('composedTtsRoute', event.target.value) })) : null,
-    draft.recognitionProvider === 'composed' ? row('composedLanguage', '语言模型', React.createElement('select', { value: draft.composedLanguageSource, onChange: (event: React.ChangeEvent<HTMLSelectElement>) => field('composedLanguageSource', event.target.value as SessionAssistantSettings['composedLanguageSource']) }, [React.createElement('option', { key: 'current', value: 'current-session' }, '使用当前 Session 模型'), React.createElement('option', { key: 'fixed', value: 'fixed' }, '固定指定模型')])) : null,
-    draft.recognitionProvider === 'composed' && draft.composedLanguageSource === 'fixed' ? row('composedProvider', '固定 Provider', React.createElement('input', { value: draft.composedLanguageProvider, placeholder: 'volcengine-agent-plan', onChange: (event: React.ChangeEvent<HTMLInputElement>) => field('composedLanguageProvider', event.target.value) })) : null,
-    draft.recognitionProvider === 'composed' && draft.composedLanguageSource === 'fixed' ? row('composedModel', '固定模型', React.createElement('input', { value: draft.composedLanguageModel, placeholder: 'glm-5-2-260617', onChange: (event: React.ChangeEvent<HTMLInputElement>) => field('composedLanguageModel', event.target.value) })) : null,
+    draft.recognitionProvider === 'composed' ? row('composedLanguage', '语言模型', React.createElement('div', null, '使用当前 Session 模型')) : null,
     draft.recognitionProvider === 'openai-realtime' ? row('voice', props.t('outputVoice'), React.createElement('select', { value: draft.openaiRealtimeVoice, onChange: (event: React.ChangeEvent<HTMLSelectElement>) => field('openaiRealtimeVoice', event.target.value as SessionAssistantSettings['openaiRealtimeVoice']) }, OPENAI_REALTIME_VOICES.map(voice => React.createElement('option', { key: voice.id, value: voice.id }, voice.name)))) : null,
     draft.recognitionProvider !== 'browser' && draft.recognitionProvider !== 'composed' ? React.createElement('div', { key: 'realtimePreview', className: 'sa-setting-row' }, [
       React.createElement('span', { key: 'label', className: 'sa-setting-label' }, props.t('voicePreview')),
@@ -398,9 +457,10 @@ export async function apply(ctx: ClientContext): Promise<() => Promise<void>> {
   const t = ctx.locale.bind(NS)
   const disposeRemote = await ctx.remote.$mount(sessionAssistantRemote)
   const remote = ctx.get('remote.sessionAssistantSettings') as SettingsPort | undefined
-  if (!remote) {
+  const composedVoice = ctx.get('remote.composedVoice') as ComposedVoicePort | undefined
+  if (!remote || !composedVoice) {
     await disposeRemote()
-    throw new Error('Session Assistant settings Remote did not mount')
+    throw new Error('Session Assistant Remotes did not mount')
   }
   const voiceAgent = (ctx as unknown as { voiceAgent: VoiceAgent }).voiceAgent
   let settingsView: SessionAssistantSettingsView = { revision: 0, writable: false, settings: DEFAULT_SETTINGS }
@@ -545,7 +605,7 @@ export async function apply(ctx: ClientContext): Promise<() => Promise<void>> {
     }
     return controller
   }
-  const injected = () => ({ controllerFor, settings, voiceAgent })
+  const injected = () => ({ controllerFor, settings, voiceAgent, composedVoice })
   ctx.slots.inject('conversation.input.right', () => ctx.slots.register({ name: 'conversation.input.right', id: 'session-assistant-microphone', order: 60, locale: NS, inject: injected }, MicControl as never))
   ctx.slots.inject('conversation.input.dock', () => ctx.slots.register({ name: 'conversation.input.dock', id: 'session-assistant-status', order: 60, locale: NS, inject: injected }, VoiceDock as never))
   ctx.slots.inject('settings.section', () => ctx.slots.register({ name: 'settings.section', id: 'session-assistant', order: 60, label: () => t('settingsTitle'), locale: NS }, (slotProps: { t: SessionAssistantTranslate }) => React.createElement(SettingsSection, {

@@ -6,13 +6,18 @@ import { SESSION_ASSISTANT_PRODUCT_KNOWLEDGE } from './model/product-knowledge.t
 import { SESSION_ASSISTANT_TOOLS, SESSION_ASSISTANT_TOOL_OUTPUT } from './model/tool-surface.ts'
 import { SessionAssistantSettingsRemote } from './settings-remote.ts'
 import { Config, OPENAI_REALTIME_VOICES, registerSessionAssistantSettings, type SessionAssistantSettings } from './settings.ts'
+import { ComposedVoicePipelineHost } from './composed-pipeline-host.ts'
+import { ComposedVoiceRemote } from './composed-voice-remote.ts'
 
 export { HELP, VERSION } from './help.ts'
 export { Config, OPENAI_REALTIME_VOICES, PROMPT, SESSION_ASSISTANT_PRODUCT_KNOWLEDGE, SESSION_ASSISTANT_TOOLS, SESSION_ASSISTANT_TOOL_OUTPUT }
 export * from './migration.ts'
 export * from './settings.ts'
 export * from './settings-remote.ts'
+export * from './voice-media.ts'
 export * from './voice-pipeline.ts'
+export * from './composed-pipeline-host.ts'
+export * from './composed-voice-remote.ts'
 export { sessionAssistantRemoteDescriptors } from './remote-contract.ts'
 export { awarenessEventsInSession, buildBoundedContext } from './client/context.ts'
 export type { PlanItem, PlanItemStatus, UserAwarenessEvent } from './client/context.ts'
@@ -40,10 +45,11 @@ export function previewProfile({ id = 'session-assistant-preview', openaiVoice }
     id,
     instructions: () => [
       SESSION_ASSISTANT_PRODUCT_KNOWLEDGE,
-      'You are the interactive voice tour for the Session Assistant described above. Use the selected voice while accurately explaining the shared product introduction and answering follow-up questions.',
-      'On the first turn, greet the user briefly, say that they can ask what this assistant can do, its boundaries, or recommended workflows, then wait for their question.',
-      'Treat capability questions, examples, limitations, recommended workflows, setup concepts, and privacy or cost questions as product-introduction questions. Distinguish built-in behavior from optional integrations and configuration-dependent availability.',
-      'This guide has no tools. Do not change settings, submit work, or perform any operation; explain how the operational Session Assistant and primary Agent would handle it instead.',
+      'You are the official interactive voice tour of Session Assistant. Your identity is Session Assistant Product Guide, not a generic AI assistant. Speak in first person as the guide for this specific DSH plugin.',
+      'Use the identity, positioning, capabilities, boundaries, and workflow from the shared product introduction above as authoritative knowledge. When asked who you are, what your role is, or what you can do, answer directly and concretely from it; never say you lack information about your identity or capabilities.',
+      'On the first turn, proactively introduce yourself by name and positioning, summarize three or four core capabilities, state that execution is handed to the primary Agent after authorization, and invite questions about capabilities, boundaries, or recommended workflows.',
+      'Treat examples, limitations, setup concepts, optional integrations, privacy, and cost as product-introduction questions. Distinguish built-in behavior from configuration-dependent availability.',
+      'This tour has no tools. Do not change settings, submit work, or perform operations; explain how the operational Session Assistant and primary Agent would handle them instead.',
       'Answer in the user\'s language, keep spoken replies concise and easy to interrupt, and never invent installed models, credentials, current settings, prices, or workspace facts.',
     ].join('\n\n'),
     tools: [],
@@ -68,6 +74,8 @@ interface RuntimeContext extends Context {
 }
 
 export function apply(ctx: RuntimeContext, config: Partial<SessionAssistantSettings> = {}): void {
+  const composedPipeline = new ComposedVoicePipelineHost(ctx)
+  new ComposedVoiceRemote(ctx, composedPipeline)
   const scope = registerSessionAssistantSettings(ctx, config)
   new SessionAssistantSettingsRemote(ctx, scope)
   ctx.effect(async () => {

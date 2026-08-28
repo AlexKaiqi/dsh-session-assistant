@@ -67,9 +67,10 @@ export function normalizeSettings(input: unknown): SessionAssistantSettings {
     doubaoRealtimeModel: route('doubaoRealtimeModel'),
     composedAsrRoute: route('composedAsrRoute'),
     composedTtsRoute: route('composedTtsRoute'),
-    composedLanguageSource: source.composedLanguageSource === 'fixed' ? 'fixed' : 'current-session',
-    composedLanguageProvider: route('composedLanguageProvider'),
-    composedLanguageModel: route('composedLanguageModel'),
+    // Fixed off-session invocation would bypass Session history/tools; keep the persisted shape for migration but normalize to the supported official Session path.
+    composedLanguageSource: 'current-session',
+    composedLanguageProvider: '',
+    composedLanguageModel: '',
     openaiContextMode: contextMode === 'off' || contextMode === 'draft' || contextMode === 'recent' ? contextMode : DEFAULT_SETTINGS.openaiContextMode,
     wakeWord: typeof source.wakeWord === 'string' && source.wakeWord.length <= 24 ? source.wakeWord : DEFAULT_SETTINGS.wakeWord,
   }

@@ -1,0 +1,1 @@
+{"version":3,"file":"voice-media.d.ts","sourceRoot":"","sources":["../../src/voice-media.ts"],"names":[],"mappings":"AAAA,MAAM,WAAW,gBAAgB;IAC/B,QAAQ,CAAC,WAAW,EAAE,MAAM,CAAA;IAC5B,QAAQ,CAAC,UAAU,EAAE,MAAM,CAAA;CAC5B;AAED,MAAM,WAAW,gBAAgB;IAC/B,QAAQ,CAAC,GAAG,EAAE,MAAM,CAAA;CACrB"}

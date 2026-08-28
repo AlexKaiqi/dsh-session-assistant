@@ -55,6 +55,6 @@ pnpm install --frozen-lockfile
 pnpm check
 ```
 
-`pnpm check` runs peer-dependency checking, type checking, the evaluation release gate, the build, 37 behavioral tests, and npm package-content verification. Run `pnpm test:e2e:live` only after explicitly authorizing a billable Provider call. It sends generated speech through a browser virtual microphone, the unified `voiceAgent`, and the real Realtime Provider, then asserts that the actual draft executor updates the draft without submitting it.
+`pnpm check` runs peer-dependency checking, type checking, the evaluation release gate, the build, 47 behavioral tests, and npm package-content verification. Run `pnpm test:e2e:live` only after explicitly authorizing a billable Provider call. It sends generated speech through a browser virtual microphone, the unified `voiceAgent`, and the real Realtime Provider, then asserts that the actual draft executor updates the draft without submitting it.
 
 Troubleshooting: a disabled voice tour usually means that no callable Realtime route is configured; microphone failures are displayed through stable localized error codes; if another voice product owns audio input, startup reports `audio_input_busy` instead of capturing concurrently.

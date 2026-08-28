@@ -93,6 +93,7 @@ export declare const TYPERT: {
             line: number;
             column: number;
         };
+        cancellation?: never;
     } | {
         id: string;
         service: string;
@@ -130,6 +131,7 @@ export declare const TYPERT: {
             line: number;
             column: number;
         };
+        cancellation?: never;
     } | {
         id: string;
         service: string;
@@ -162,6 +164,81 @@ export declare const TYPERT: {
                 proposals: import("zod").ZodArray<import("zod").ZodString>;
                 currentUpdated: import("zod").ZodBoolean;
                 error: import("zod").ZodOptional<import("zod").ZodString>;
+            }, import("zod/v4/core").$strict>;
+        };
+        sourceLocation: {
+            file: string;
+            line: number;
+            column: number;
+        };
+        cancellation?: never;
+    } | {
+        id: string;
+        service: string;
+        namespace: string;
+        method: string;
+        invocation: {
+            kind: "direct";
+        };
+        parameters: {
+            name: string;
+            wire: "request";
+            source: "json";
+            codec: {
+                mode: "strict";
+                typeSymbol: string;
+                schema: import("zod").ZodObject<{
+                    routeId: import("zod").ZodString;
+                    inputArtifactId: import("zod").ZodUUID;
+                }, import("zod/v4/core").$strict>;
+            };
+        }[];
+        cancellation: {
+            parameter: "signal";
+        };
+        result: {
+            mode: "strict";
+            typeSymbol: string;
+            schema: import("zod").ZodObject<{
+                text: import("zod").ZodString;
+            }, import("zod/v4/core").$strict>;
+        };
+        sourceLocation: {
+            file: string;
+            line: number;
+            column: number;
+        };
+    } | {
+        id: string;
+        service: string;
+        namespace: string;
+        method: string;
+        invocation: {
+            kind: "direct";
+        };
+        parameters: {
+            name: string;
+            wire: "request";
+            source: "json";
+            codec: {
+                mode: "strict";
+                typeSymbol: string;
+                schema: import("zod").ZodObject<{
+                    routeId: import("zod").ZodString;
+                    text: import("zod").ZodString;
+                    speaker: import("zod").ZodOptional<import("zod").ZodString>;
+                }, import("zod/v4/core").$strict>;
+            };
+        }[];
+        cancellation: {
+            parameter: "signal";
+        };
+        result: {
+            mode: "strict";
+            typeSymbol: string;
+            schema: import("zod").ZodObject<{
+                uri: import("zod").ZodString;
+                mediaType: import("zod").ZodLiteral<"audio/mpeg">;
             }, import("zod/v4/core").$strict>;
         };
         sourceLocation: {

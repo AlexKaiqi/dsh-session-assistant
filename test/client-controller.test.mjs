@@ -184,12 +184,12 @@ test('the voice tour opens an interactive product guide on the selected model an
   assert.deepEqual(voiceAgentPreviewOptions({ ...base, recognitionProvider: 'doubao-realtime', doubaoRealtimeModel: 'doubao/voice-a' }), {
     routeId: 'doubao/voice-a', protocol: 'doubao-realtime-duplex', profileId: 'session-assistant-preview',
     outputOnly: false,
-    previewText: '请简短欢迎我，并告诉我可以直接问你这个会话助手插件能做什么、有什么边界或推荐工作流，然后等我继续提问。',
+    previewText: '请以 Session Assistant 产品向导的身份主动介绍你是谁、你的定位、三到四项核心能力、与主 Agent 的分工和能力边界，然后邀请我继续询问。',
   })
   assert.deepEqual(voiceAgentPreviewOptions({ ...base, recognitionProvider: 'openai-realtime', openaiRealtimeModel: 'openai/gpt-realtime', openaiRealtimeVoice: 'cedar' }), {
     routeId: 'openai/gpt-realtime', protocol: 'openai-webrtc', profileId: 'session-assistant-preview-openai-cedar',
     outputOnly: false,
-    previewText: '请简短欢迎我，并告诉我可以直接问你这个会话助手插件能做什么、有什么边界或推荐工作流，然后等我继续提问。',
+    previewText: '请以 Session Assistant 产品向导的身份主动介绍你是谁、你的定位、三到四项核心能力、与主 Agent 的分工和能力边界，然后邀请我继续询问。',
   })
 })
 

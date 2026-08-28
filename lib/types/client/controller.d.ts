@@ -173,7 +173,7 @@ export declare class VoiceController {
     private stepBaseline;
     /** Stable assistant-step cursor used to extract the final reply for composed TTS. */
     private replyCursor;
-    private readonly finalReplyWaiters;
+    private finalReplyWaiter;
     /** Accumulated finalized voice-discussion transcript of the current session, kept for curation. */
     private discussion;
     /** Discussion snapshot at the last successful curation; only the delta after it is re-curated. */

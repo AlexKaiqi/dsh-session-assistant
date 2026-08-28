@@ -26,12 +26,12 @@ export type VoicePipeline = NativeRealtimeVoicePipeline | ComposedVoicePipeline
 
 export type ComposedVoicePhase = 'idle' | 'recording' | 'transcribing' | 'thinking' | 'synthesizing' | 'playing' | 'cancelled' | 'failed'
 
-export interface ComposedVoiceTurnPorts<Audio, Reply> {
-  transcribe(audio: Audio, stage: TaskVoiceStage, signal: AbortSignal): Promise<string>
+export interface ComposedVoiceTurnPorts<InputAudio, OutputAudio, Reply> {
+  transcribe(audio: InputAudio, stage: TaskVoiceStage, signal: AbortSignal): Promise<string>
   submit(text: string, stage: LanguageStage, signal: AbortSignal): Promise<Reply>
   replyText(reply: Reply): string
-  synthesize(text: string, stage: TaskVoiceStage, signal: AbortSignal): Promise<Audio>
-  play(audio: Audio, signal: AbortSignal): Promise<void>
+  synthesize(text: string, stage: TaskVoiceStage, signal: AbortSignal): Promise<OutputAudio>
+  play(audio: OutputAudio, signal: AbortSignal): Promise<void>
   onPhase?(phase: ComposedVoicePhase): void
 }
 
@@ -39,12 +39,12 @@ export interface ComposedVoiceTurnPorts<Audio, Reply> {
  * Provider-neutral turn orchestrator. It owns ordering and cancellation only;
  * task adapters own wire protocols, while the Session port owns Agent history.
  */
-export class ComposedVoiceTurn<Audio, Reply> {
+export class ComposedVoiceTurn<InputAudio, OutputAudio, Reply> {
   private controller: AbortController | undefined
   private readonly pipeline: ComposedVoicePipeline
-  private readonly ports: ComposedVoiceTurnPorts<Audio, Reply>
+  private readonly ports: ComposedVoiceTurnPorts<InputAudio, OutputAudio, Reply>
 
-  constructor(pipeline: ComposedVoicePipeline, ports: ComposedVoiceTurnPorts<Audio, Reply>) {
+  constructor(pipeline: ComposedVoicePipeline, ports: ComposedVoiceTurnPorts<InputAudio, OutputAudio, Reply>) {
     this.pipeline = pipeline
     this.ports = ports
   }
@@ -53,7 +53,7 @@ export class ComposedVoiceTurn<Audio, Reply> {
     this.controller?.abort()
   }
 
-  async run(audio: Audio): Promise<Reply> {
+  async run(audio: InputAudio): Promise<Reply> {
     this.cancel()
     const controller = new AbortController()
     this.controller = controller

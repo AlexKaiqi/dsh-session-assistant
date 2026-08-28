@@ -42,6 +42,21 @@ const curatorViewSchema = z.object({
   error: z.string().optional(),
 }).strict()
 
+const transcribeRequestSchema = z.object({
+  routeId: z.string().min(1).max(240),
+  inputArtifactId: z.uuid(),
+}).strict()
+const transcriptionResultSchema = z.object({ text: z.string().min(1).max(20_000) }).strict()
+const synthesizeRequestSchema = z.object({
+  routeId: z.string().min(1).max(240),
+  text: z.string().min(1).max(10_000),
+  speaker: z.string().min(1).max(128).optional(),
+}).strict()
+const synthesisResultSchema = z.object({
+  uri: z.string().regex(/^\/[a-z0-9/_-]*\/artifacts\/audio\/[0-9a-f-]{36}$/),
+  mediaType: z.literal('audio/mpeg'),
+}).strict()
+
 export function sessionAssistantRemoteDescriptors() {
   return [
     {
@@ -83,6 +98,30 @@ export function sessionAssistantRemoteDescriptors() {
       }],
       result: { mode: 'strict' as const, typeSymbol: 'dsh-session-assistant#CuratorView', schema: curatorViewSchema },
       sourceLocation: { file: 'src/settings-remote.ts', line: 53, column: 3 },
+    },
+    {
+      id: 'dsh-session-assistant#composedVoice/transcribe',
+      service: 'composedVoice', namespace: 'composedVoice', method: 'transcribe',
+      invocation: { kind: 'direct' as const },
+      parameters: [{
+        name: 'request', wire: 'request' as const, source: 'json' as const,
+        codec: { mode: 'strict' as const, typeSymbol: 'dsh-session-assistant#RemoteTranscribeRequest', schema: transcribeRequestSchema },
+      }],
+      cancellation: { parameter: 'signal' as const },
+      result: { mode: 'strict' as const, typeSymbol: 'dsh-session-assistant#RemoteTranscriptionResult', schema: transcriptionResultSchema },
+      sourceLocation: { file: 'src/composed-voice-remote.ts', line: 29, column: 3 },
+    },
+    {
+      id: 'dsh-session-assistant#composedVoice/synthesize',
+      service: 'composedVoice', namespace: 'composedVoice', method: 'synthesize',
+      invocation: { kind: 'direct' as const },
+      parameters: [{
+        name: 'request', wire: 'request' as const, source: 'json' as const,
+        codec: { mode: 'strict' as const, typeSymbol: 'dsh-session-assistant#RemoteSynthesizeRequest', schema: synthesizeRequestSchema },
+      }],
+      cancellation: { parameter: 'signal' as const },
+      result: { mode: 'strict' as const, typeSymbol: 'dsh-session-assistant#RemoteSynthesisResult', schema: synthesisResultSchema },
+      sourceLocation: { file: 'src/composed-voice-remote.ts', line: 40, column: 3 },
     },
   ]
 }
