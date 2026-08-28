@@ -19,6 +19,7 @@ const paths = new Set(packed.files.map(file => file.path))
 for (const path of [
   'README.md',
   'README.en.md',
+  'INTRODUCTION.md',
   'docs/design.md',
   'lib/index.js',
   'lib/client.js',

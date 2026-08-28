@@ -5,6 +5,7 @@ export interface SessionNodeStoreLike {
     entries?(): Iterable<readonly [string, unknown]>;
 }
 export interface SessionSnapshotLike {
+    readonly running?: boolean;
     readonly chat?: {
         readonly order?: readonly string[];
         readonly nodes?: SessionNodeStoreLike;
@@ -70,6 +71,21 @@ export type UserAwarenessEvent = {
 export declare function awarenessEventsInSession(session: SessionSnapshotLike): UserAwarenessEvent[];
 /** Find every `ask_user_question` tool call in the session snapshot with its readable text. */
 export declare function questionsInSession(session: SessionSnapshotLike): PendingQuestion[];
+export interface AgentFinalReply {
+    readonly nodeKey: string;
+    readonly turn?: number;
+    readonly step?: number;
+    readonly messageId?: string;
+    readonly text: string;
+    readonly interrupted: boolean;
+}
+/** Stable cursor for the latest visible terminal assistant step. */
+export declare function assistantReplyCursor(session: SessionSnapshotLike): string | undefined;
+/**
+ * Return the final visible reply after a cursor, only once the Session turn is no
+ * longer running. Tool/reasoning blocks remain in history but are never spoken.
+ */
+export declare function finalAgentReplyAfter(session: SessionSnapshotLike, cursor?: string): AgentFinalReply | undefined;
 /** Count finished assistant steps (primary-Agent turns) in the session snapshot. */
 export declare function countAssistantSteps(session: SessionSnapshotLike): number;
 //# sourceMappingURL=context.d.ts.map

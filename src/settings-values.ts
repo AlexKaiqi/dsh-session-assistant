@@ -1,5 +1,6 @@
-export type RecognitionProvider = 'browser' | 'openai-realtime' | 'doubao-realtime'
+export type RecognitionProvider = 'browser' | 'openai-realtime' | 'doubao-realtime' | 'composed'
 export type RecognitionLanguage = 'zh-CN' | 'en-US'
+export type ComposedLanguageSource = 'current-session' | 'fixed'
 export type ContextMode = 'off' | 'draft' | 'recent'
 export type OpenAIRealtimeVoiceId = 'marin' | 'cedar' | 'alloy' | 'ash' | 'ballad' | 'coral' | 'echo' | 'sage' | 'shimmer' | 'verse'
 
@@ -9,6 +10,11 @@ export interface SessionAssistantSettings {
   openaiRealtimeModel: string
   openaiRealtimeVoice: OpenAIRealtimeVoiceId
   doubaoRealtimeModel: string
+  composedAsrRoute: string
+  composedTtsRoute: string
+  composedLanguageSource: ComposedLanguageSource
+  composedLanguageProvider: string
+  composedLanguageModel: string
   openaiContextMode: ContextMode
   /** Wake word that reactivates the voice assistant from standby; empty disables standby wake-up. */
   wakeWord: string
@@ -34,6 +40,11 @@ export const DEFAULT_SETTINGS: SessionAssistantSettings = {
   openaiRealtimeModel: '',
   openaiRealtimeVoice: 'marin',
   doubaoRealtimeModel: '',
+  composedAsrRoute: '',
+  composedTtsRoute: '',
+  composedLanguageSource: 'current-session',
+  composedLanguageProvider: '',
+  composedLanguageModel: '',
   openaiContextMode: 'recent',
   wakeWord: '你好助手',
 }
@@ -49,11 +60,16 @@ export function normalizeSettings(input: unknown): SessionAssistantSettings {
   const contextMode = source.openaiContextMode
   const route = (field: string) => typeof source[field] === 'string' && /^[A-Za-z0-9._:/-]{0,180}$/.test(source[field]) ? source[field] : ''
   return {
-    recognitionProvider: provider === 'browser' || provider === 'openai-realtime' || provider === 'doubao-realtime' ? provider : DEFAULT_SETTINGS.recognitionProvider,
+    recognitionProvider: provider === 'browser' || provider === 'openai-realtime' || provider === 'doubao-realtime' || provider === 'composed' ? provider : DEFAULT_SETTINGS.recognitionProvider,
     recognitionLang: language === 'en-US' || language === 'zh-CN' ? language : DEFAULT_SETTINGS.recognitionLang,
     openaiRealtimeModel: route('openaiRealtimeModel'),
     openaiRealtimeVoice: typeof source.openaiRealtimeVoice === 'string' && OPENAI_VOICE_IDS.has(source.openaiRealtimeVoice) ? source.openaiRealtimeVoice as OpenAIRealtimeVoiceId : DEFAULT_SETTINGS.openaiRealtimeVoice,
     doubaoRealtimeModel: route('doubaoRealtimeModel'),
+    composedAsrRoute: route('composedAsrRoute'),
+    composedTtsRoute: route('composedTtsRoute'),
+    composedLanguageSource: source.composedLanguageSource === 'fixed' ? 'fixed' : 'current-session',
+    composedLanguageProvider: route('composedLanguageProvider'),
+    composedLanguageModel: route('composedLanguageModel'),
     openaiContextMode: contextMode === 'off' || contextMode === 'draft' || contextMode === 'recent' ? contextMode : DEFAULT_SETTINGS.openaiContextMode,
     wakeWord: typeof source.wakeWord === 'string' && source.wakeWord.length <= 24 ? source.wakeWord : DEFAULT_SETTINGS.wakeWord,
   }

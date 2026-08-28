@@ -1,13 +1,19 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 
 const mod = await import('../lib/index.js')
 
-test('model contract keeps the voice role bounded and exposes exact tool/result surfaces', () => {
-  assert.match(mod.PROMPT, /cannot execute tasks/)
+test('model contract keeps the voice role bounded and exposes exact tool/result surfaces', async () => {
+  const humanIntroduction = (await readFile(new URL('../INTRODUCTION.md', import.meta.url), 'utf8')).trim()
+  assert.equal(mod.SESSION_ASSISTANT_PRODUCT_KNOWLEDGE, humanIntroduction)
+  assert.match(mod.PROMPT, /不执行任务/)
+  assert.ok(mod.PROMPT.startsWith(humanIntroduction))
+  const guidePrompt = mod.previewProfile().instructions()
+  assert.ok(guidePrompt.startsWith(humanIntroduction))
+  assert.equal(guidePrompt.split(humanIntroduction).length - 1, 1)
   assert.match(mod.PROMPT, /Classify each user turn/)
   assert.match(mod.PROMPT, /explicit affirmative reply/)
   assert.match(mod.PROMPT, /immediate, short spoken acknowledgement/)

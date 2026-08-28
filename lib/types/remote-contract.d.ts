@@ -21,6 +21,7 @@ export declare function sessionAssistantRemoteDescriptors(): ({
                         browser: "browser";
                         "openai-realtime": "openai-realtime";
                         "doubao-realtime": "doubao-realtime";
+                        composed: "composed";
                     }>;
                     recognitionLang: z.ZodEnum<{
                         "zh-CN": "zh-CN";
@@ -29,6 +30,14 @@ export declare function sessionAssistantRemoteDescriptors(): ({
                     openaiRealtimeModel: z.ZodString;
                     openaiRealtimeVoice: z.ZodString;
                     doubaoRealtimeModel: z.ZodString;
+                    composedAsrRoute: z.ZodString;
+                    composedTtsRoute: z.ZodString;
+                    composedLanguageSource: z.ZodEnum<{
+                        "current-session": "current-session";
+                        fixed: "fixed";
+                    }>;
+                    composedLanguageProvider: z.ZodString;
+                    composedLanguageModel: z.ZodString;
                     openaiContextMode: z.ZodEnum<{
                         off: "off";
                         draft: "draft";
@@ -50,6 +59,7 @@ export declare function sessionAssistantRemoteDescriptors(): ({
                     browser: "browser";
                     "openai-realtime": "openai-realtime";
                     "doubao-realtime": "doubao-realtime";
+                    composed: "composed";
                 }>;
                 recognitionLang: z.ZodEnum<{
                     "zh-CN": "zh-CN";
@@ -58,6 +68,14 @@ export declare function sessionAssistantRemoteDescriptors(): ({
                 openaiRealtimeModel: z.ZodString;
                 openaiRealtimeVoice: z.ZodString;
                 doubaoRealtimeModel: z.ZodString;
+                composedAsrRoute: z.ZodString;
+                composedTtsRoute: z.ZodString;
+                composedLanguageSource: z.ZodEnum<{
+                    "current-session": "current-session";
+                    fixed: "fixed";
+                }>;
+                composedLanguageProvider: z.ZodString;
+                composedLanguageModel: z.ZodString;
                 openaiContextMode: z.ZodEnum<{
                     off: "off";
                     draft: "draft";

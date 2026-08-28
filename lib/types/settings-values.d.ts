@@ -1,5 +1,6 @@
-export type RecognitionProvider = 'browser' | 'openai-realtime' | 'doubao-realtime';
+export type RecognitionProvider = 'browser' | 'openai-realtime' | 'doubao-realtime' | 'composed';
 export type RecognitionLanguage = 'zh-CN' | 'en-US';
+export type ComposedLanguageSource = 'current-session' | 'fixed';
 export type ContextMode = 'off' | 'draft' | 'recent';
 export type OpenAIRealtimeVoiceId = 'marin' | 'cedar' | 'alloy' | 'ash' | 'ballad' | 'coral' | 'echo' | 'sage' | 'shimmer' | 'verse';
 export interface SessionAssistantSettings {
@@ -8,6 +9,11 @@ export interface SessionAssistantSettings {
     openaiRealtimeModel: string;
     openaiRealtimeVoice: OpenAIRealtimeVoiceId;
     doubaoRealtimeModel: string;
+    composedAsrRoute: string;
+    composedTtsRoute: string;
+    composedLanguageSource: ComposedLanguageSource;
+    composedLanguageProvider: string;
+    composedLanguageModel: string;
     openaiContextMode: ContextMode;
     /** Wake word that reactivates the voice assistant from standby; empty disables standby wake-up. */
     wakeWord: string;

@@ -1,6 +1,6 @@
 import type { SessionAssistantSettings } from '../settings.ts'
 import { DECLARED_SETTINGS_FIELDS, normalizeSettings } from '../settings-values.ts'
-import { awarenessEventsInSession, countAssistantSteps, type SessionContextMetadata, type SessionSnapshotLike, type UserAwarenessEvent } from './context.ts'
+import { assistantReplyCursor, awarenessEventsInSession, countAssistantSteps, finalAgentReplyAfter, type AgentFinalReply, type SessionContextMetadata, type SessionSnapshotLike, type UserAwarenessEvent } from './context.ts'
 
 export interface InputStateLike { readonly draft: string }
 export interface InputActionsLike { setDraft(text: string): void; submit(): void }
@@ -171,8 +171,11 @@ export class VoiceController {
   private lastApplied = ''
   private disposed = false
   private generation = 0
-  /** Finished assistant-step count when the voice session opened (or when a submission landed). */
+  /** Finished assistant-step count retained for existing user-awareness behavior. */
   private stepBaseline: number | undefined
+  /** Stable assistant-step cursor used to extract the final reply for composed TTS. */
+  private replyCursor: string | undefined
+  private readonly finalReplyWaiters = new Set<(reply: AgentFinalReply) => void>()
   /** Accumulated finalized voice-discussion transcript of the current session, kept for curation. */
   private discussion = ''
   /** Discussion snapshot at the last successful curation; only the delta after it is re-curated. */
@@ -308,6 +311,30 @@ export class VoiceController {
       this.publish({ agentReply: true })
       saLog('primary agent replied after submission')
     }
+    const reply = finalAgentReplyAfter(snapshot as SessionSnapshotLike, this.replyCursor)
+    if (reply && this.finalReplyWaiters.size > 0) {
+      this.replyCursor = reply.nodeKey
+      for (const resolve of this.finalReplyWaiters) resolve(reply)
+      this.finalReplyWaiters.clear()
+    }
+  }
+
+  /** Submit recognized text through the official composer and await this turn's final visible reply. */
+  submitRecognizedText(text: string, signal: AbortSignal): Promise<AgentFinalReply> {
+    const transcript = text.trim()
+    if (!transcript) return Promise.reject(new Error('Recognized text is empty'))
+    if (this.disposed) return Promise.reject(new Error('Session Assistant is disposed'))
+    const session = this.deps.getSession?.() as SessionSnapshotLike | undefined
+    this.replyCursor = session ? assistantReplyCursor(session) : undefined
+    this.deps.inputActions.setDraft(transcript)
+    this.deps.inputActions.submit()
+    return new Promise<AgentFinalReply>((resolve, reject) => {
+      const done = (reply: AgentFinalReply) => { signal.removeEventListener('abort', aborted); resolve(reply) }
+      const aborted = () => { this.finalReplyWaiters.delete(done); reject(signal.reason ?? new DOMException('Aborted', 'AbortError')) }
+      this.finalReplyWaiters.add(done)
+      signal.addEventListener('abort', aborted, { once: true })
+      if (signal.aborted) aborted()
+    })
   }
 
   private notifyAwareness(event: Exclude<UserAwarenessEvent, { visibility: 'internal' }>): void {
@@ -601,12 +628,12 @@ export function voiceConversationOptions(settings: SessionAssistantSettings, con
   }
 }
 
-/** Open an interactive audition using the selected Realtime model and voice. */
+/** Open an interactive product guide using the selected Realtime model and voice. */
 export function voiceAgentPreviewOptions(settings: SessionAssistantSettings, routeId?: string) {
   const openai = settings.recognitionProvider === 'openai-realtime'
   const previewText = settings.recognitionLang === 'zh-CN'
-    ? '请先简短地和我打个招呼，然后等我继续和你对话。'
-    : 'Greet me briefly, then wait for me to continue the conversation.'
+    ? '请简短欢迎我，并告诉我可以直接问你这个会话助手插件能做什么、有什么边界或推荐工作流，然后等我继续提问。'
+    : 'Welcome me briefly, explain that I can ask what the Session Assistant plugin can do, its boundaries, or recommended workflows, then wait for my questions.'
   return {
     routeId: routeId ?? (openai ? settings.openaiRealtimeModel : settings.doubaoRealtimeModel),
     protocol: openai ? 'openai-webrtc' as const : 'doubao-realtime-duplex' as const,

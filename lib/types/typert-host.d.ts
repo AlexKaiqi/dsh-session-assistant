@@ -24,6 +24,7 @@ export declare const TYPERT: {
                             browser: "browser";
                             "openai-realtime": "openai-realtime";
                             "doubao-realtime": "doubao-realtime";
+                            composed: "composed";
                         }>;
                         recognitionLang: import("zod").ZodEnum<{
                             "zh-CN": "zh-CN";
@@ -32,6 +33,14 @@ export declare const TYPERT: {
                         openaiRealtimeModel: import("zod").ZodString;
                         openaiRealtimeVoice: import("zod").ZodString;
                         doubaoRealtimeModel: import("zod").ZodString;
+                        composedAsrRoute: import("zod").ZodString;
+                        composedTtsRoute: import("zod").ZodString;
+                        composedLanguageSource: import("zod").ZodEnum<{
+                            "current-session": "current-session";
+                            fixed: "fixed";
+                        }>;
+                        composedLanguageProvider: import("zod").ZodString;
+                        composedLanguageModel: import("zod").ZodString;
                         openaiContextMode: import("zod").ZodEnum<{
                             off: "off";
                             draft: "draft";
@@ -53,6 +62,7 @@ export declare const TYPERT: {
                         browser: "browser";
                         "openai-realtime": "openai-realtime";
                         "doubao-realtime": "doubao-realtime";
+                        composed: "composed";
                     }>;
                     recognitionLang: import("zod").ZodEnum<{
                         "zh-CN": "zh-CN";
@@ -61,6 +71,14 @@ export declare const TYPERT: {
                     openaiRealtimeModel: import("zod").ZodString;
                     openaiRealtimeVoice: import("zod").ZodString;
                     doubaoRealtimeModel: import("zod").ZodString;
+                    composedAsrRoute: import("zod").ZodString;
+                    composedTtsRoute: import("zod").ZodString;
+                    composedLanguageSource: import("zod").ZodEnum<{
+                        "current-session": "current-session";
+                        fixed: "fixed";
+                    }>;
+                    composedLanguageProvider: import("zod").ZodString;
+                    composedLanguageModel: import("zod").ZodString;
                     openaiContextMode: import("zod").ZodEnum<{
                         off: "off";
                         draft: "draft";

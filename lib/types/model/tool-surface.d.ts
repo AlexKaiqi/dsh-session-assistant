@@ -127,6 +127,22 @@ export declare const UPDATE_ASSISTANT_SETTINGS_TOOL: {
             doubaoRealtimeModel: {
                 type: string;
             };
+            composedAsrRoute: {
+                type: string;
+            };
+            composedTtsRoute: {
+                type: string;
+            };
+            composedLanguageSource: {
+                type: string;
+                enum: string[];
+            };
+            composedLanguageProvider: {
+                type: string;
+            };
+            composedLanguageModel: {
+                type: string;
+            };
             openaiContextMode: {
                 type: string;
                 enum: string[];

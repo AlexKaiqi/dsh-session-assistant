@@ -1,5 +1,5 @@
 import type { SessionAssistantSettings } from '../settings.ts';
-import { type SessionContextMetadata, type UserAwarenessEvent } from './context.ts';
+import { type AgentFinalReply, type SessionContextMetadata, type UserAwarenessEvent } from './context.ts';
 export interface InputStateLike {
     readonly draft: string;
 }
@@ -169,8 +169,11 @@ export declare class VoiceController {
     private lastApplied;
     private disposed;
     private generation;
-    /** Finished assistant-step count when the voice session opened (or when a submission landed). */
+    /** Finished assistant-step count retained for existing user-awareness behavior. */
     private stepBaseline;
+    /** Stable assistant-step cursor used to extract the final reply for composed TTS. */
+    private replyCursor;
+    private readonly finalReplyWaiters;
     /** Accumulated finalized voice-discussion transcript of the current session, kept for curation. */
     private discussion;
     /** Discussion snapshot at the last successful curation; only the delta after it is re-curated. */
@@ -205,6 +208,8 @@ export declare class VoiceController {
      * significant plan milestones are sent to the configured UI/voice sink.
      */
     observeSession(snapshot: unknown): void;
+    /** Submit recognized text through the official composer and await this turn's final visible reply. */
+    submitRecognizedText(text: string, signal: AbortSignal): Promise<AgentFinalReply>;
     private notifyAwareness;
     consume(event: VoiceEvent): Promise<void>;
     private appendDiscussion;
@@ -244,7 +249,7 @@ export declare function voiceConversationOptions(settings: SessionAssistantSetti
     context: string;
     language: import("../settings-values.ts").RecognitionLanguage;
 };
-/** Open an interactive audition using the selected Realtime model and voice. */
+/** Open an interactive product guide using the selected Realtime model and voice. */
 export declare function voiceAgentPreviewOptions(settings: SessionAssistantSettings, routeId?: string): {
     routeId: string;
     protocol: "openai-webrtc" | "doubao-realtime-duplex";

@@ -2,15 +2,17 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { SettingsProvider } from '@deepseek-ai/dsh-settings'
 import { migrateLegacySettings } from './migration.ts'
 import { PROMPT } from './model/prompt.ts'
+import { SESSION_ASSISTANT_PRODUCT_KNOWLEDGE } from './model/product-knowledge.ts'
 import { SESSION_ASSISTANT_TOOLS, SESSION_ASSISTANT_TOOL_OUTPUT } from './model/tool-surface.ts'
 import { SessionAssistantSettingsRemote } from './settings-remote.ts'
 import { Config, OPENAI_REALTIME_VOICES, registerSessionAssistantSettings, type SessionAssistantSettings } from './settings.ts'
 
 export { HELP, VERSION } from './help.ts'
-export { Config, OPENAI_REALTIME_VOICES, PROMPT, SESSION_ASSISTANT_TOOLS, SESSION_ASSISTANT_TOOL_OUTPUT }
+export { Config, OPENAI_REALTIME_VOICES, PROMPT, SESSION_ASSISTANT_PRODUCT_KNOWLEDGE, SESSION_ASSISTANT_TOOLS, SESSION_ASSISTANT_TOOL_OUTPUT }
 export * from './migration.ts'
 export * from './settings.ts'
 export * from './settings-remote.ts'
+export * from './voice-pipeline.ts'
 export { sessionAssistantRemoteDescriptors } from './remote-contract.ts'
 export { awarenessEventsInSession, buildBoundedContext } from './client/context.ts'
 export type { PlanItem, PlanItemStatus, UserAwarenessEvent } from './client/context.ts'
@@ -33,10 +35,17 @@ export function sessionProfile({ id = 'session-assistant', openaiVoice }: { id?:
 export function previewProfile({ id = 'session-assistant-preview', openaiVoice }: { id?: string; openaiVoice?: string } = {}) {
   // OpenAI Realtime receives previewText as a user text turn. Doubao Duplex
   // needs a short injected audio cue to initiate the first response, then the
-  // live microphone takes over so the audition remains a real conversation.
+  // live microphone takes over so this becomes a guided product introduction.
   return {
     id,
-    instructions: () => 'This is an interactive voice audition. Greet the user briefly on the first turn, then continue a natural spoken conversation so they can judge the selected voice. Keep replies concise. Do not call tools.',
+    instructions: () => [
+      SESSION_ASSISTANT_PRODUCT_KNOWLEDGE,
+      'You are the interactive voice tour for the Session Assistant described above. Use the selected voice while accurately explaining the shared product introduction and answering follow-up questions.',
+      'On the first turn, greet the user briefly, say that they can ask what this assistant can do, its boundaries, or recommended workflows, then wait for their question.',
+      'Treat capability questions, examples, limitations, recommended workflows, setup concepts, and privacy or cost questions as product-introduction questions. Distinguish built-in behavior from optional integrations and configuration-dependent availability.',
+      'This guide has no tools. Do not change settings, submit work, or perform any operation; explain how the operational Session Assistant and primary Agent would handle it instead.',
+      'Answer in the user\'s language, keep spoken replies concise and easy to interrupt, and never invent installed models, credentials, current settings, prices, or workspace facts.',
+    ].join('\n\n'),
     tools: [],
     voice: openaiVoice ? { openai: openaiVoice } : {},
   }

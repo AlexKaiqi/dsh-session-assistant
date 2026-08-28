@@ -6,7 +6,10 @@ export interface SessionNodeStoreLike {
   entries?(): Iterable<readonly [string, unknown]>
 }
 
-export interface SessionSnapshotLike { readonly chat?: { readonly order?: readonly string[]; readonly nodes?: SessionNodeStoreLike } }
+export interface SessionSnapshotLike {
+  readonly running?: boolean
+  readonly chat?: { readonly order?: readonly string[]; readonly nodes?: SessionNodeStoreLike }
+}
 
 /** Host-owned facts that let the voice frontend route work without reading the workspace itself. */
 export interface SessionContextMetadata {
@@ -121,6 +124,9 @@ interface SessionNodeEntry {
     readonly content?: unknown
     readonly source?: unknown
     readonly messageId?: unknown
+    readonly turn?: unknown
+    readonly step?: unknown
+    readonly finalNode?: { readonly messageId?: unknown; readonly blocks?: unknown }
   }
 }
 
@@ -282,6 +288,56 @@ export function questionsInSession(session: SessionSnapshotLike): PendingQuestio
   return awarenessEventsInSession(session)
     .filter((event): event is Extract<UserAwarenessEvent, { type: 'user_input_required' }> => event.type === 'user_input_required')
     .map(event => ({ callId: event.callId, text: event.text }))
+}
+
+export interface AgentFinalReply {
+  readonly nodeKey: string
+  readonly turn?: number
+  readonly step?: number
+  readonly messageId?: string
+  readonly text: string
+  readonly interrupted: boolean
+}
+
+/** Stable cursor for the latest visible terminal assistant step. */
+export function assistantReplyCursor(session: SessionSnapshotLike): string | undefined {
+  let cursor: string | undefined
+  for (const node of nodeEntries(session)) {
+    if (node.kind !== 'assistant-step' || node.visibility === 'hidden' || node.data?.status === 'running') continue
+    cursor = node.id
+  }
+  return cursor
+}
+
+/**
+ * Return the final visible reply after a cursor, only once the Session turn is no
+ * longer running. Tool/reasoning blocks remain in history but are never spoken.
+ */
+export function finalAgentReplyAfter(session: SessionSnapshotLike, cursor?: string): AgentFinalReply | undefined {
+  if (session.running === true) return undefined
+  let afterCursor = cursor === undefined
+  let reply: AgentFinalReply | undefined
+  for (const node of nodeEntries(session)) {
+    if (!afterCursor) {
+      if (node.id === cursor) afterCursor = true
+      continue
+    }
+    if (node.kind !== 'assistant-step' || node.visibility === 'hidden') continue
+    const status = node.data?.status
+    if (status !== 'settled' && status !== 'interrupted') continue
+    const final = node.data?.finalNode
+    const text = blockText(final?.blocks ?? node.data?.blocks).trim()
+    if (!text) continue
+    reply = {
+      nodeKey: node.id,
+      ...(typeof node.data?.turn === 'number' ? { turn: node.data.turn } : {}),
+      ...(typeof node.data?.step === 'number' ? { step: node.data.step } : {}),
+      ...(typeof final?.messageId === 'string' ? { messageId: final.messageId } : {}),
+      text,
+      interrupted: status === 'interrupted',
+    }
+  }
+  return reply
 }
 
 /** Count finished assistant steps (primary-Agent turns) in the session snapshot. */

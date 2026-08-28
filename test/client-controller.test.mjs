@@ -179,17 +179,17 @@ test('provider selection is data-only and bounded context carries workspace fact
   assert.doesNotMatch(operationalOnly, /hidden draft/)
 })
 
-test('the voice preview opens an interactive conversation on the selected model and voice', () => {
+test('the voice tour opens an interactive product guide on the selected model and voice', () => {
   const base = { recognitionProvider: 'browser', recognitionLang: 'zh-CN', openaiRealtimeModel: '', openaiRealtimeVoice: 'marin', doubaoRealtimeModel: '', openaiContextMode: 'recent', wakeWord: '你好助手' }
   assert.deepEqual(voiceAgentPreviewOptions({ ...base, recognitionProvider: 'doubao-realtime', doubaoRealtimeModel: 'doubao/voice-a' }), {
     routeId: 'doubao/voice-a', protocol: 'doubao-realtime-duplex', profileId: 'session-assistant-preview',
     outputOnly: false,
-    previewText: '请先简短地和我打个招呼，然后等我继续和你对话。',
+    previewText: '请简短欢迎我，并告诉我可以直接问你这个会话助手插件能做什么、有什么边界或推荐工作流，然后等我继续提问。',
   })
   assert.deepEqual(voiceAgentPreviewOptions({ ...base, recognitionProvider: 'openai-realtime', openaiRealtimeModel: 'openai/gpt-realtime', openaiRealtimeVoice: 'cedar' }), {
     routeId: 'openai/gpt-realtime', protocol: 'openai-webrtc', profileId: 'session-assistant-preview-openai-cedar',
     outputOnly: false,
-    previewText: '请先简短地和我打个招呼，然后等我继续和你对话。',
+    previewText: '请简短欢迎我，并告诉我可以直接问你这个会话助手插件能做什么、有什么边界或推荐工作流，然后等我继续提问。',
   })
 })
 

@@ -1,13 +1,15 @@
 import type { Context } from '@deepseek-ai/cordis';
 import type { SettingsProvider } from '@deepseek-ai/dsh-settings';
 import { PROMPT } from './model/prompt.ts';
+import { SESSION_ASSISTANT_PRODUCT_KNOWLEDGE } from './model/product-knowledge.ts';
 import { SESSION_ASSISTANT_TOOLS, SESSION_ASSISTANT_TOOL_OUTPUT } from './model/tool-surface.ts';
 import { Config, OPENAI_REALTIME_VOICES, type SessionAssistantSettings } from './settings.ts';
 export { HELP, VERSION } from './help.ts';
-export { Config, OPENAI_REALTIME_VOICES, PROMPT, SESSION_ASSISTANT_TOOLS, SESSION_ASSISTANT_TOOL_OUTPUT };
+export { Config, OPENAI_REALTIME_VOICES, PROMPT, SESSION_ASSISTANT_PRODUCT_KNOWLEDGE, SESSION_ASSISTANT_TOOLS, SESSION_ASSISTANT_TOOL_OUTPUT };
 export * from './migration.ts';
 export * from './settings.ts';
 export * from './settings-remote.ts';
+export * from './voice-pipeline.ts';
 export { sessionAssistantRemoteDescriptors } from './remote-contract.ts';
 export { awarenessEventsInSession, buildBoundedContext } from './client/context.ts';
 export type { PlanItem, PlanItemStatus, UserAwarenessEvent } from './client/context.ts';
